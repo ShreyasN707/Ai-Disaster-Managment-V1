@@ -1,0 +1,82 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Disaster Management - Demo</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 0; background: #0b1220; color: #e6eaf2; }
+    header { padding: 16px; background: #121a2b; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+    .container { padding: 16px; max-width: 1000px; margin: 0 auto; }
+    .status { display: inline-block; padding: 4px 10px; border-radius: 12px; margin-left: 8px; font-size: 12px; }
+    .status.ok { background: #173; }
+    .status.err { background: #731; }
+    .card { background: #111826; border: 1px solid #1f2937; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+    .severity { text-transform: uppercase; font-weight: 700; }
+    .severity.low { color: #7dd3fc; }
+    .severity.medium { color: #fde68a; }
+    .severity.high { color: #fca5a5; }
+    .severity.critical { color: #f87171; }
+    small { color: #94a3b8; }
+    a { color: #93c5fd; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h2>AI Disaster Management Backend Demo
+        <span id="socket-status" class="status err">Disconnected</span>
+      </h2>
+      <p>Open API: <a href="/health" target="_blank">/health</a> | <a href="/api/public/alerts" target="_blank">/api/public/alerts</a></p>
+    </div>
+  </header>
+  <main class="container">
+    <section class="card">
+      <h3>Live Risk</h3>
+      <div id="risk">Loading...</div>
+    </section>
+    <section class="card">
+      <h3>Active Alerts</h3>
+      <div id="alerts"></div>
+    </section>
+  </main>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const alertList = document.getElementById('alerts');
+    const riskDiv = document.getElementById('risk');
+    const socketStatus = document.getElementById('socket-status');
+
+    function renderAlerts(alerts) {
+      if (!alerts.length) {
+        alertList.innerHTML = '<p>No active alerts.</p>';
+        return;
+      }
+      alertList.innerHTML = alerts.map(a => `
+        <div class="card">
+          <div class="severity ${a.severity}">${a.severity}</div>
+          <div><strong>Area:</strong> ${a.area}</div>
+          <div><strong>Message:</strong> ${a.message}</div>
+          <small>${new Date(a.createdAt).toLocaleString()}</small>
+        </div>
+      `).join('');
+    }
+
+    async function load() {
+      const res = await fetch('/api/public/alerts');
+      const data = await res.json();
+      renderAlerts(data.alerts || []);
+      riskDiv.textContent = `Risk Level: ${data.risk?.level || 'unknown'} (score ${data.risk?.score ?? 'n/a'})`;
+    }
+
+    load();
+
+    const socket = io();
+    socket.on('connect', () => { socketStatus.textContent = 'Connected'; socketStatus.className = 'status ok'; });
+    socket.on('disconnect', () => { socketStatus.textContent = 'Disconnected'; socketStatus.className = 'status err'; });
+    socket.on('alert:new', (alert) => {
+      load();
+    });
+  </script>
+</body>
+</html>
