@@ -108,14 +108,11 @@ try {
 
 // Initialize MongoDB connection with cloud-ready configuration
 const mongoOptions = {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
   serverSelectionTimeoutMS: 10000,
   socketTimeoutMS: 45000,
   maxPoolSize: 10,
   minPoolSize: 1,
   maxIdleTimeMS: 30000,
-  bufferMaxEntries: 0,
   retryWrites: true,
   w: 'majority'
 };
