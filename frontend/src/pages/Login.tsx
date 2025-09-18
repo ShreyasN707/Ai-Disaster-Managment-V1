@@ -64,7 +64,7 @@ export default function Login() {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="admin@disasterwatch.com"
+                  placeholder="admin@disaster.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -131,10 +131,40 @@ export default function Login() {
         {/* Demo Credentials */}
         <Card className="bg-muted/50">
           <CardContent className="p-4">
-            <p className="text-sm font-medium text-center mb-2">Demo Credentials:</p>
-            <div className="text-xs space-y-1">
-              <p><strong>Operator:</strong> operator@demo.com / password123</p>
-              <p><strong>Admin:</strong> admin@demo.com / password123</p>
+            <p className="text-sm font-medium text-center mb-3">Demo Credentials:</p>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="text-xs">
+                  <p><strong>Admin:</strong> admin@disaster.com / admin123</p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setEmail('admin@disaster.com');
+                    setPassword('admin123');
+                    setSelectedRole('admin');
+                  }}
+                >
+                  Use Admin
+                </Button>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="text-xs">
+                  <p><strong>Operator:</strong> operator@disaster.com / operator123</p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setEmail('operator@disaster.com');
+                    setPassword('operator123');
+                    setSelectedRole('operator');
+                  }}
+                >
+                  Use Operator
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>

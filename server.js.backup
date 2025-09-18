@@ -1,0 +1,22 @@
+// DEPRECATED: This was the standalone ML server
+// ML functionality has been integrated into src/services/mlService.js
+// and exposed via src/routes/ml.routes.js
+// This file is kept for reference only
+
+const express = require('express');
+const multer = require('multer');
+// const tf = require('@tensorflow/tfjs-node'); // Commented out due to installation issues
+const sharp = require('sharp');
+const path = require('path');
+const fs = require('fs');
+
+// This standalone server is no longer used
+// The ML functionality is now part of the main backend server
+// See: src/services/mlService.js and src/routes/ml.routes.js
+
+console.log('⚠️  This standalone ML server is deprecated.');
+console.log('🔄 ML functionality has been integrated into the main backend.');
+console.log('🚀 Please use: npm start (to run the unified server)');
+console.log('📚 See DEPLOYMENT.md for setup instructions.');
+
+process.exit(1);

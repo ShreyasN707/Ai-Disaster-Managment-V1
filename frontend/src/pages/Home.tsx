@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Navigation } from "@/components/Navigation";
 import { RiskLevelWidget } from "@/components/RiskLevelWidget";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,51 +8,54 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Bell, MapPin, Clock, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { ApiResponse } from "@/lib/api";
 
 interface Alert {
-  id: string;
+  _id: string;
+  title: string;
+  message: string;
   type: string;
-  location: string;
-  dateTime: string;
-  description: string;
-  severity: "critical" | "high" | "warning" | "moderate" | "low";
+  area: string;
+  severity: "critical" | "high" | "medium" | "low";
+  createdAt: string;
+  active: boolean;
 }
-
-const recentAlerts: Alert[] = [
-  {
-    id: "1",
-    type: "Active Flood Warning",
-    location: "Riverdale District",
-    dateTime: "2024-07-20 14:30",
-    description: "Heavy rainfall expected, leading to potential flooding in low-lying areas.",
-    severity: "high"
-  },
-  {
-    id: "2", 
-    type: "Earthquake Advisory",
-    location: "Mountain View County",
-    dateTime: "2024-07-19 09:15",
-    description: "Minor tremors detected, residents advised to prepare for aftershocks.",
-    severity: "warning"
-  },
-  {
-    id: "3",
-    type: "Active Wildfire Alert", 
-    location: "Pine Forest Region",
-    dateTime: "2024-07-18 18:00",
-    description: "Rapidly spreading wildfire, evacuation orders in effect for surrounding communities.",
-    severity: "critical"
-  }
-];
 
 export default function Home() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [smsNotifications, setSmsNotifications] = useState(false);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [subscribing, setSubscribing] = useState(false);
   const { toast } = useToast();
 
-  const handleSubscribe = (e: React.FormEvent) => {
+  // Fetch real alerts from API
+  useEffect(() => {
+    const fetchAlerts = async () => {
+      try {
+        const response = await fetch('http://localhost:4000/api/public/alerts');
+        const data = await response.json();
+        if (data.alerts) {
+          setAlerts(data.alerts);
+        }
+      } catch (error) {
+        console.error('Failed to fetch alerts:', error);
+        toast({
+          title: "Failed to load alerts",
+          description: "Unable to fetch the latest alerts. Please try again later.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAlerts();
+  }, [toast]);
+
+  const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!email && !phone) {
@@ -64,13 +67,55 @@ export default function Home() {
       return;
     }
 
-    toast({
-      title: "Successfully subscribed!",
-      description: "You'll receive disaster alerts on your selected channels.",
-    });
+    setSubscribing(true);
 
-    setEmail("");
-    setPhone("");
+    try {
+      const subscriptionData: any = {
+        alertTypes: ['all']
+      };
+
+      if (emailNotifications && email) {
+        subscriptionData.email = email;
+      }
+
+      if (smsNotifications && phone) {
+        subscriptionData.phone = phone;
+      }
+
+      const response = await fetch('http://localhost:4000/api/public/subscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(subscriptionData),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast({
+          title: "Successfully subscribed!",
+          description: data.message || "You'll receive disaster alerts on your selected channels.",
+        });
+        setEmail("");
+        setPhone("");
+      } else {
+        toast({
+          title: "Subscription failed",
+          description: data.message || "Unable to subscribe. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Subscription error:', error);
+      toast({
+        title: "Subscription failed",
+        description: "Unable to subscribe. Please check your connection and try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSubscribing(false);
+    }
   };
 
   return (
@@ -157,8 +202,8 @@ export default function Home() {
                     </div>
                   </div>
                   
-                  <Button type="submit" className="w-full md:w-auto">
-                    Subscribe Now
+                  <Button type="submit" className="w-full md:w-auto" disabled={subscribing}>
+                    {subscribing ? "Subscribing..." : "Subscribe Now"}
                   </Button>
                 </form>
               </CardContent>
@@ -186,33 +231,47 @@ export default function Home() {
                   </tr>
                 </thead>
                 <tbody>
-                  {recentAlerts.map((alert) => (
-                    <tr key={alert.id} className="border-b border-border hover:bg-muted/50">
-                      <td className="py-4 px-2">
-                        <div className="flex items-center space-x-2">
-                          <Badge variant={alert.severity}>
-                            {alert.severity.charAt(0).toUpperCase() + alert.severity.slice(1)}
-                          </Badge>
-                          <span className="font-medium text-foreground">{alert.type}</span>
-                        </div>
-                      </td>
-                      <td className="py-4 px-2">
-                        <div className="flex items-center space-x-1 text-muted-foreground">
-                          <MapPin className="h-4 w-4" />
-                          <span>{alert.location}</span>
-                        </div>
-                      </td>
-                      <td className="py-4 px-2">
-                        <div className="flex items-center space-x-1 text-muted-foreground">
-                          <Clock className="h-4 w-4" />
-                          <span>{alert.dateTime}</span>
-                        </div>
-                      </td>
-                      <td className="py-4 px-2 text-sm text-muted-foreground max-w-md">
-                        {alert.description}
+                  {loading ? (
+                    <tr>
+                      <td colSpan={4} className="py-8 text-center text-muted-foreground">
+                        Loading alerts...
                       </td>
                     </tr>
-                  ))}
+                  ) : alerts.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="py-8 text-center text-muted-foreground">
+                        No active alerts at this time.
+                      </td>
+                    </tr>
+                  ) : (
+                    alerts.map((alert) => (
+                      <tr key={alert._id} className="border-b border-border hover:bg-muted/50">
+                        <td className="py-4 px-2">
+                          <div className="flex items-center space-x-2">
+                            <Badge variant={alert.severity === 'medium' ? 'secondary' : alert.severity}>
+                              {alert.severity.charAt(0).toUpperCase() + alert.severity.slice(1)}
+                            </Badge>
+                            <span className="font-medium text-foreground">{alert.title}</span>
+                          </div>
+                        </td>
+                        <td className="py-4 px-2">
+                          <div className="flex items-center space-x-1 text-muted-foreground">
+                            <MapPin className="h-4 w-4" />
+                            <span>{alert.area || 'Not specified'}</span>
+                          </div>
+                        </td>
+                        <td className="py-4 px-2">
+                          <div className="flex items-center space-x-1 text-muted-foreground">
+                            <Clock className="h-4 w-4" />
+                            <span>{new Date(alert.createdAt).toLocaleString()}</span>
+                          </div>
+                        </td>
+                        <td className="py-4 px-2 text-sm text-muted-foreground max-w-md">
+                          {alert.message}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>

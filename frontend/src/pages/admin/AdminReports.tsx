@@ -1,92 +1,174 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { SearchBar } from "@/components/shared/SearchBar";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { 
   FileText, 
   Download, 
   Eye, 
+  Filter, 
+  AlertTriangle, 
+  CheckCircle, 
+  Clock,
+  TrendingUp,
+  Users,
+  X,
   Calendar,
-  Filter,
-  AlertTriangle,
-  CheckCircle,
-  Clock
+  MapPin,
+  User
 } from "lucide-react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import io from 'socket.io-client';
 
 interface Report {
-  id: string;
+  _id: string;
   title: string;
   description: string;
   severity: 'low' | 'moderate' | 'high' | 'critical';
   status: 'pending' | 'reviewed' | 'resolved';
   location: string;
   operatorName: string;
+  operatorId: {
+    _id: string;
+    name: string;
+  };
+  reviewedBy?: {
+    _id: string;
+    name: string;
+  };
+  resolvedBy?: {
+    _id: string;
+    name: string;
+  };
+  adminNotes?: string;
+  relatedSensor?: string;
   createdAt: string;
-  attachments?: number;
+  updatedAt: string;
+  attachments: any[];
 }
 
-const mockReports: Report[] = [
-  {
-    id: 'INC001',
-    title: 'Sensor malfunction at river monitoring station',
-    description: 'Water level sensor showing inconsistent readings',
-    severity: 'high',
-    status: 'pending',
-    location: 'Riverfront District, Sector C',
-    operatorName: 'John Operator',
-    createdAt: '2024-01-15 14:30',
-    attachments: 3
-  },
-  {
-    id: 'INC002',
-    title: 'Infrastructure damage report',
-    description: 'Bridge structural integrity compromised',
-    severity: 'critical',
-    status: 'reviewed',
-    location: 'Bridge 42, Central Artery',
-    operatorName: 'Sarah Field',
-    createdAt: '2024-01-15 09:15',
-    attachments: 5
-  },
-  {
-    id: 'INC003',
-    title: 'Routine maintenance completed',
-    description: 'Regular sensor calibration and cleaning',
-    severity: 'low',
-    status: 'resolved',
-    location: 'Industrial Zone North',
-    operatorName: 'Mike Tech',
-    createdAt: '2024-01-14 16:45',
-    attachments: 1
-  }
-];
 
 export default function AdminReports() {
-  const [reports, setReports] = useState<Report[]>(mockReports);
-  const [filteredReports, setFilteredReports] = useState<Report[]>(mockReports);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [filteredReports, setFilteredReports] = useState<Report[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [severityFilter, setSeverityFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [severityFilter, setSeverityFilter] = useState('all');
+  const [loading, setLoading] = useState(true);
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [updatingReport, setUpdatingReport] = useState<string | null>(null);
   const { toast } = useToast();
+  const { token } = useAuth();
+
+  // Fetch reports from API
+  const fetchReports = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/admin/reports', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setReports(data.reports);
+        setFilteredReports(data.reports);
+      } else {
+        throw new Error('Failed to fetch reports');
+      }
+    } catch (error) {
+      console.error('Error fetching reports:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch reports. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Update report status
+  const updateReportStatus = async (reportId: string, status: string, adminNotes?: string) => {
+    try {
+      const response = await fetch(`/api/admin/reports/${reportId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ status, adminNotes })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Update local state
+        setReports(prev => prev.map(report => 
+          report._id === reportId ? data.report : report
+        ));
+        setFilteredReports(prev => prev.map(report => 
+          report._id === reportId ? data.report : report
+        ));
+        
+        toast({
+          title: "Success",
+          description: data.message
+        });
+      } else {
+        throw new Error('Failed to update report');
+      }
+    } catch (error) {
+      console.error('Error updating report:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update report. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (token) {
+      fetchReports();
+    }
+
+    // Setup WebSocket for real-time updates
+    const socket = io();
+    
+    socket.on('newReport', (newReport: Report) => {
+      setReports(prev => [newReport, ...prev]);
+      setFilteredReports(prev => [newReport, ...prev]);
+      toast({
+        title: "New Report",
+        description: `New report submitted: ${newReport.title}`
+      });
+    });
+
+    socket.on('reportUpdated', (updatedReport: Report) => {
+      setReports(prev => prev.map(report => 
+        report._id === updatedReport._id ? updatedReport : report
+      ));
+      setFilteredReports(prev => prev.map(report => 
+        report._id === updatedReport._id ? updatedReport : report
+      ));
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [token, toast]);
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
@@ -151,17 +233,92 @@ export default function AdminReports() {
   };
 
   const handleViewReport = (reportId: string) => {
-    toast({
-      title: "View Report",
-      description: `Opening detailed view for report ${reportId}`,
-    });
+    const report = reports.find(r => r._id === reportId);
+    if (report) {
+      setSelectedReport(report);
+      setIsViewModalOpen(true);
+    }
+  };
+
+  const handleUpdateReportStatus = async (reportId: string, newStatus: string, adminNotes?: string) => {
+    try {
+      setUpdatingReport(reportId);
+      const response = await fetch(`/api/admin/reports/${reportId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ status: newStatus, adminNotes })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setReports(prev => prev.map(report => 
+          report._id === reportId ? data.report : report
+        ));
+        toast({
+          title: "Success",
+          description: data.message
+        });
+        setIsViewModalOpen(false);
+      } else {
+        throw new Error('Failed to update report');
+      }
+    } catch (error) {
+      console.error('Error updating report:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update report. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setUpdatingReport(null);
+    }
   };
 
   const handleExportReports = () => {
-    toast({
-      title: "Export Started",
-      description: "Reports are being exported to PDF. You'll be notified when ready.",
-    });
+    try {
+      // Create CSV content
+      const headers = ['Report ID', 'Title', 'Description', 'Severity', 'Status', 'Location', 'Operator', 'Created At', 'Updated At'];
+      const csvContent = [
+        headers.join(','),
+        ...filteredReports.map(report => [
+          report._id,
+          `"${report.title.replace(/"/g, '""')}"`,
+          `"${report.description.replace(/"/g, '""')}"`,
+          report.severity,
+          report.status,
+          `"${report.location.replace(/"/g, '""')}"`,
+          `"${report.operatorName || 'Unknown'}"`,
+          new Date(report.createdAt).toLocaleString(),
+          new Date(report.updatedAt).toLocaleString()
+        ].join(','))
+      ].join('\n');
+
+      // Create and download file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `disaster_reports_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast({
+        title: "Export Successful",
+        description: `${filteredReports.length} reports exported to CSV file.`,
+      });
+    } catch (error) {
+      console.error('Export error:', error);
+      toast({
+        title: "Export Failed",
+        description: "Failed to export reports. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   const pendingCount = reports.filter(r => r.status === 'pending').length;
@@ -245,10 +402,10 @@ export default function AdminReports() {
                     <Filter className="h-4 w-4 text-muted-foreground" />
                   </div>
                   <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                    <SearchBar
+                    <Input
                       placeholder="Search reports..."
                       value={searchQuery}
-                      onChange={handleSearch}
+                      onChange={(e) => handleSearch(e.target.value)}
                       className="w-full sm:w-80"
                     />
                     <Select value={statusFilter} onValueChange={handleStatusFilter}>
@@ -295,9 +452,9 @@ export default function AdminReports() {
                     </TableHeader>
                     <TableBody>
                       {filteredReports.map((report) => (
-                        <TableRow key={report.id}>
+                        <TableRow key={report._id}>
                           <TableCell className="font-mono text-sm">
-                            {report.id}
+                            {report._id}
                           </TableCell>
                           <TableCell className="max-w-xs">
                             <div>
@@ -307,7 +464,7 @@ export default function AdminReports() {
                               </p>
                             </div>
                           </TableCell>
-                          <TableCell>{report.operatorName}</TableCell>
+                          <TableCell>{report.operatorName || report.operatorId?.name}</TableCell>
                           <TableCell className="max-w-xs truncate">
                             {report.location}
                           </TableCell>
@@ -317,9 +474,9 @@ export default function AdminReports() {
                             {report.createdAt}
                           </TableCell>
                           <TableCell>
-                            {report.attachments && (
+                            {report.attachments && report.attachments.length > 0 && (
                               <span className="text-sm text-muted-foreground">
-                                {report.attachments} files
+                                {report.attachments.length} files
                               </span>
                             )}
                           </TableCell>
@@ -327,7 +484,7 @@ export default function AdminReports() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleViewReport(report.id)}
+                              onClick={() => handleViewReport(report._id)}
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
@@ -342,6 +499,116 @@ export default function AdminReports() {
           </div>
         </main>
       </div>
+
+      {/* View Report Modal */}
+      <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Report Details
+            </DialogTitle>
+          </DialogHeader>
+          
+          {selectedReport && (
+            <div className="space-y-6">
+              {/* Report Header */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted rounded-lg">
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Report ID</Label>
+                  <p className="font-mono text-sm">{selectedReport._id}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Status</Label>
+                  <div className="mt-1">{getStatusBadge(selectedReport.status)}</div>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Severity</Label>
+                  <div className="mt-1">{getSeverityBadge(selectedReport.severity)}</div>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Created</Label>
+                  <p className="text-sm flex items-center gap-1">
+                    <Calendar className="h-3 w-3" />
+                    {new Date(selectedReport.createdAt).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+
+              {/* Report Content */}
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Title</Label>
+                  <h3 className="text-lg font-semibold">{selectedReport.title}</h3>
+                </div>
+
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Description</Label>
+                  <p className="text-sm bg-muted p-3 rounded-md">{selectedReport.description}</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm font-medium text-muted-foreground">Location</Label>
+                    <p className="text-sm flex items-center gap-1">
+                      <MapPin className="h-3 w-3" />
+                      {selectedReport.location}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium text-muted-foreground">Operator</Label>
+                    <p className="text-sm flex items-center gap-1">
+                      <User className="h-3 w-3" />
+                      {selectedReport.operatorName}
+                    </p>
+                  </div>
+                </div>
+
+                {selectedReport.relatedSensor && (
+                  <div>
+                    <Label className="text-sm font-medium text-muted-foreground">Related Sensor</Label>
+                    <p className="text-sm">{selectedReport.relatedSensor}</p>
+                  </div>
+                )}
+
+                {selectedReport.adminNotes && (
+                  <div>
+                    <Label className="text-sm font-medium text-muted-foreground">Admin Notes</Label>
+                    <p className="text-sm bg-blue-50 p-3 rounded-md border-l-4 border-blue-500">
+                      {selectedReport.adminNotes}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Status Update Section */}
+              <div className="border-t pt-4">
+                <Label className="text-sm font-medium">Update Status</Label>
+                <div className="flex gap-2 mt-2">
+                  {selectedReport.status === 'pending' && (
+                    <Button
+                      onClick={() => handleUpdateReportStatus(selectedReport._id, 'reviewed')}
+                      disabled={updatingReport === selectedReport._id}
+                      className="bg-yellow-600 hover:bg-yellow-700"
+                    >
+                      Mark as Reviewed
+                    </Button>
+                  )}
+                  {(selectedReport.status === 'pending' || selectedReport.status === 'reviewed') && (
+                    <Button
+                      onClick={() => handleUpdateReportStatus(selectedReport._id, 'resolved')}
+                      disabled={updatingReport === selectedReport._id}
+                      className="bg-green-600 hover:bg-green-700"
+                    >
+                      Mark as Resolved
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </SidebarProvider>
   );
 }

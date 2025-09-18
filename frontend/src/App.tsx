@@ -18,6 +18,7 @@ import AdminSettings from "./pages/admin/AdminSettings";
 import OperatorSensors from "./pages/operator/OperatorSensors";
 import OperatorReports from "./pages/operator/OperatorReports";
 import OperatorAlerts from "./pages/operator/OperatorAlerts";
+import MLDashboard from "./pages/MLDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -108,6 +109,16 @@ const App = () => (
               element={
                 <ProtectedRoute requiredRole="operator">
                   <OperatorAlerts />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* ML Dashboard - Available to both Admin and Operator */}
+            <Route 
+              path="/ml" 
+              element={
+                <ProtectedRoute requiredRole="operator">
+                  <MLDashboard />
                 </ProtectedRoute>
               } 
             />

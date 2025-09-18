@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { OperatorSidebar } from "@/components/operator/OperatorSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,73 +6,154 @@ import { Badge } from "@/components/ui/badge";
 import { ReportForm } from "@/components/operator/ReportForm";
 import { FileText, Clock, CheckCircle, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import io from 'socket.io-client';
 
 interface Report {
-  id: string;
+  _id: string;
   title: string;
   description: string;
   severity: 'low' | 'moderate' | 'high' | 'critical';
   status: 'pending' | 'reviewed' | 'resolved';
   location: string;
+  relatedSensor?: string;
+  operatorId: string;
+  operatorName: string;
+  reviewedBy?: {
+    _id: string;
+    name: string;
+  };
+  resolvedBy?: {
+    _id: string;
+    name: string;
+  };
+  adminNotes?: string;
   createdAt: string;
-  attachments?: number;
+  updatedAt: string;
+  attachments: any[];
 }
 
-const mockReports: Report[] = [
-  {
-    id: 'INC005',
-    title: 'Sensor calibration completed',
-    description: 'Regular maintenance and calibration of river sensor',
-    severity: 'low',
-    status: 'resolved',
-    location: 'Riverfront District, Sector C',
-    createdAt: '2024-01-15 10:30',
-    attachments: 2
-  },
-  {
-    id: 'INC004',
-    title: 'Equipment anomaly detected',
-    description: 'Unusual readings from air quality monitor',
-    severity: 'moderate',
-    status: 'reviewed',
-    location: 'Industrial Zone North',
-    createdAt: '2024-01-14 14:15',
-    attachments: 1
-  },
-  {
-    id: 'INC003',
-    title: 'Infrastructure inspection',
-    description: 'Weekly safety inspection of monitoring equipment',
-    severity: 'low',
-    status: 'pending',
-    location: 'Mountain Base Research Outpost',
-    createdAt: '2024-01-14 09:45'
-  }
-];
 
 export default function OperatorReports() {
-  const [reports, setReports] = useState<Report[]>(mockReports);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const { token } = useAuth();
 
-  const handleSubmitReport = (reportData: any) => {
-    const newReport: Report = {
-      id: reportData.id,
-      title: reportData.title,
-      description: reportData.description,
-      severity: reportData.severity,
-      status: 'pending',
-      location: reportData.location,
-      createdAt: new Date().toLocaleString(),
-      attachments: reportData.files.length
-    };
+  // Fetch operator's reports
+  const fetchReports = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/operator/reports', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
 
-    setReports(prev => [newReport, ...prev]);
-    
-    toast({
-      title: "Report Submitted",
-      description: "Your incident report has been successfully submitted and is pending review.",
-    });
+      if (response.ok) {
+        const data = await response.json();
+        setReports(data.reports);
+      } else {
+        throw new Error('Failed to fetch reports');
+      }
+    } catch (error) {
+      console.error('Error fetching reports:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch reports. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
+
+  // Submit new report
+  const handleSubmitReport = async (reportData: any) => {
+    try {
+      console.log('🚀 Submitting report:', reportData);
+      console.log('🔑 Token available:', !!token);
+
+      if (!token) {
+        throw new Error('No authentication token available');
+      }
+
+      const payload = {
+        title: reportData.title,
+        description: reportData.description,
+        severity: reportData.severity,
+        location: reportData.location,
+        relatedSensor: reportData.relatedSensor
+      };
+
+      console.log('📤 Payload:', payload);
+
+      const response = await fetch('/api/operator/reports', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      console.log('📥 Response status:', response.status);
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Report submitted successfully:', data);
+        setReports(prev => [data.report, ...prev]);
+        
+        toast({
+          title: "Success",
+          description: data.message
+        });
+      } else {
+        const errorData = await response.json();
+        console.error('❌ Server error:', errorData);
+        throw new Error(errorData.message || 'Failed to submit report');
+      }
+    } catch (error) {
+      console.error('❌ Error submitting report:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to submit report. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (token) {
+      fetchReports();
+    }
+
+    // Setup WebSocket for real-time updates
+    const socket = io();
+    
+    socket.on('reportUpdated', (updatedReport: Report) => {
+      setReports(prev => prev.map(report => 
+        report._id === updatedReport._id ? updatedReport : report
+      ));
+      
+      if (updatedReport.status === 'reviewed') {
+        toast({
+          title: "Report Reviewed",
+          description: `Your report "${updatedReport.title}" has been reviewed by admin.`
+        });
+      } else if (updatedReport.status === 'resolved') {
+        toast({
+          title: "Report Resolved",
+          description: `Your report "${updatedReport.title}" has been resolved.`
+        });
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [token, toast]);
 
   const getSeverityBadge = (severity: string) => {
     switch (severity) {
@@ -176,37 +257,59 @@ export default function OperatorReports() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {reports.map((report) => (
-                      <div key={report.id} className="border border-border rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center space-x-2">
-                            <span className="font-mono text-sm text-muted-foreground">
-                              {report.id}
-                            </span>
-                            {getSeverityBadge(report.severity)}
-                          </div>
-                          {getStatusBadge(report.status)}
-                        </div>
-                        
-                        <h4 className="font-medium mb-2">{report.title}</h4>
-                        <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
-                          {report.description}
-                        </p>
-                        
-                        <div className="flex justify-between items-center text-xs text-muted-foreground">
-                          <span>{report.location}</span>
-                          <span>{report.createdAt}</span>
-                        </div>
-                        
-                        {report.attachments && (
-                          <div className="mt-2">
-                            <span className="text-xs text-muted-foreground">
-                              {report.attachments} attachment{report.attachments > 1 ? 's' : ''}
-                            </span>
-                          </div>
-                        )}
+                    {loading ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        Loading reports...
                       </div>
-                    ))}
+                    ) : reports.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        No reports submitted yet. Submit your first report using the form.
+                      </div>
+                    ) : (
+                      reports.map((report) => (
+                        <div key={report._id} className="border border-border rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center space-x-2">
+                              <span className="font-mono text-sm text-muted-foreground">
+                                {report._id}
+                              </span>
+                              {getSeverityBadge(report.severity)}
+                            </div>
+                            {getStatusBadge(report.status)}
+                          </div>
+                          
+                          <h4 className="font-medium mb-2">{report.title}</h4>
+                          <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
+                            {report.description}
+                          </p>
+                          
+                          {report.relatedSensor && (
+                            <p className="text-xs text-muted-foreground mb-2">
+                              Related Sensor: {report.relatedSensor}
+                            </p>
+                          )}
+                          
+                          <div className="flex justify-between items-center text-xs text-muted-foreground">
+                            <span>{report.location}</span>
+                            <span>{new Date(report.createdAt).toLocaleString()}</span>
+                          </div>
+                          
+                          {report.attachments && report.attachments.length > 0 && (
+                            <div className="mt-2">
+                              <span className="text-xs text-muted-foreground">
+                                {report.attachments.length} attachment{report.attachments.length > 1 ? 's' : ''}
+                              </span>
+                            </div>
+                          )}
+                          
+                          {report.adminNotes && (
+                            <div className="mt-2 p-2 bg-muted rounded text-xs">
+                              <strong>Admin Notes:</strong> {report.adminNotes}
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    )}
                   </div>
                 </CardContent>
               </Card>

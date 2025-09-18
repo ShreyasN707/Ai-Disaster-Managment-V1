@@ -17,7 +17,12 @@ const app = express();
 app.use(helmet());
 
 // CORS
-app.use(cors({ origin: config.origin, credentials: true }));
+app.use(cors({ 
+  origin: config.cors.origins, 
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+}));
 
 // Logging
 if (config.env !== 'test') {
@@ -35,8 +40,16 @@ app.use(mongoSanitize());
 // Rate limit
 app.use('/api', rateLimiter.generalLimiter);
 
-// Static public demo frontend
-app.use(express.static(path.join(__dirname, 'public')));
+// Serve static files from uploads directory
+app.use('/uploads', express.static(path.join(process.cwd(), config.uploadsDir)));
+
+// Serve frontend build files in production
+if (config.env === 'production') {
+  app.use(express.static(path.join(process.cwd(), config.frontend.buildDir)));
+} else {
+  // Static public demo frontend for development
+  app.use(express.static(path.join(__dirname, 'public')));
+}
 
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'ok', env: config.env }));
@@ -44,9 +57,20 @@ app.get('/health', (req, res) => res.json({ status: 'ok', env: config.env }));
 // API routes
 app.use('/api', routes);
 
-// 404 handler
+// Serve frontend SPA in production (catch-all route)
+if (config.env === 'production') {
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(process.cwd(), config.frontend.buildDir, 'index.html'));
+  });
+}
+
+// 404 handler for API routes
 app.use((req, res, next) => {
-  res.status(404).json({ message: 'Not found' });
+  if (req.path.startsWith('/api')) {
+    res.status(404).json({ message: 'API endpoint not found' });
+  } else {
+    res.status(404).json({ message: 'Not found' });
+  }
 });
 
 // Error handler
