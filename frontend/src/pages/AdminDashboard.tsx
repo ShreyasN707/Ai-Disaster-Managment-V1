@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { StatsCard } from "@/components/shared/StatsCard";
+import MLDisasterMap from "@/components/map/MLDisasterMap";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Users, 
@@ -320,6 +321,23 @@ export default function AdminDashboard() {
               </div>
             </CardContent>
           </Card>
+
+          {/* AI-Powered Real-Time Map */}
+          <div className="lg:col-span-2">
+            <MLDisasterMap 
+              height="400px"
+              alerts={alerts.map(alert => ({
+                ...alert,
+                title: alert.message,
+                severity: alert.severity as 'low' | 'moderate' | 'high' | 'critical'
+              }))}
+              sensors={sensors.map(sensor => ({
+                ...sensor,
+                health: sensor.health as 'good' | 'warning' | 'critical',
+                location: typeof sensor.location === 'string' ? sensor.location : sensor.location?.address || 'Unknown'
+              }))}
+            />
+          </div>
             </div>
           </div>
         </main>

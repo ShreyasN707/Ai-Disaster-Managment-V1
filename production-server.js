@@ -257,17 +257,45 @@ const subscriptionSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+// Sensor Schema
+const sensorSchema = new mongoose.Schema({
+  sensorId: { type: String, required: true, unique: true },
+  type: { type: String, enum: ['temperature', 'humidity', 'pressure', 'seismic', 'water_level', 'air_quality', 'wind_speed', 'rainfall'], required: true },
+  status: { type: String, enum: ['online', 'offline', 'warning', 'maintenance'], default: 'offline' },
+  health: { type: String, enum: ['good', 'warning', 'critical'], default: 'good' },
+  battery: { type: Number, min: 0, max: 100, default: 100 },
+  location: {
+    type: { type: String, default: 'Point' },
+    coordinates: [Number] // [longitude, latitude]
+  },
+  area: String,
+  assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  lastReading: {
+    value: Number,
+    unit: String,
+    timestamp: { type: Date, default: Date.now }
+  },
+  calibrationDate: Date,
+  maintenanceSchedule: Date,
+  isActive: { type: Boolean, default: true },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
 // Report Schema
 const reportSchema = new mongoose.Schema({
   title: { type: String, required: true },
   description: { type: String, required: true },
   severity: { type: String, enum: ['low', 'moderate', 'high', 'critical'], required: true },
-  status: { type: String, enum: ['pending', 'reviewed', 'resolved'], default: 'pending' },
-  location: { type: String, required: true },
-  relatedSensor: String,
+  status: { type: String, enum: ['pending', 'in_progress', 'resolved', 'closed'], default: 'pending' },
+  location: {
+    type: { type: String, default: 'Point' },
+    coordinates: [Number]
+  },
+  area: String,
   attachments: [{
     filename: String,
-    originalName: String,
+    path: String,
     size: Number,
     mimetype: String
   }],
@@ -287,6 +315,7 @@ const User = mongoose.model('User', userSchema);
 const Alert = mongoose.model('Alert', alertSchema);
 const Incident = mongoose.model('Incident', incidentSchema);
 const Subscription = mongoose.model('Subscription', subscriptionSchema);
+const Sensor = mongoose.model('Sensor', sensorSchema);
 const Report = mongoose.model('Report', reportSchema);
 
 // Authentication middleware
@@ -433,6 +462,117 @@ async function initializeDatabase() {
 
         await Incident.insertMany(incidents);
         console.log('✅ Sample incidents created');
+      }
+
+      // Create sample sensors with GPS coordinates
+      if (await Sensor.countDocuments() === 0) {
+        const sensors = [
+          {
+            sensorId: 'SENS001',
+            type: 'water_level',
+            status: 'online',
+            health: 'good',
+            battery: 85,
+            location: { coordinates: [72.8777, 19.0760] }, // Mumbai coordinates [lng, lat]
+            area: 'Downtown',
+            assignedTo: operator._id,
+            lastReading: {
+              value: 2.5,
+              unit: 'meters',
+              timestamp: new Date()
+            },
+            calibrationDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 days ago
+            maintenanceSchedule: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000) // 60 days from now
+          },
+          {
+            sensorId: 'SENS002',
+            type: 'seismic',
+            status: 'warning',
+            health: 'warning',
+            battery: 45,
+            location: { coordinates: [72.8656, 19.0896] }, // Riverside area
+            area: 'Riverside',
+            assignedTo: operator._id,
+            lastReading: {
+              value: 3.2,
+              unit: 'richter',
+              timestamp: new Date()
+            },
+            calibrationDate: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000),
+            maintenanceSchedule: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000)
+          },
+          {
+            sensorId: 'SENS003',
+            type: 'temperature',
+            status: 'online',
+            health: 'good',
+            battery: 92,
+            location: { coordinates: [72.8908, 19.0625] }, // Industrial Zone
+            area: 'Industrial Zone',
+            assignedTo: admin._id,
+            lastReading: {
+              value: 28.5,
+              unit: 'celsius',
+              timestamp: new Date()
+            },
+            calibrationDate: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000),
+            maintenanceSchedule: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
+          },
+          {
+            sensorId: 'SENS004',
+            type: 'air_quality',
+            status: 'offline',
+            health: 'critical',
+            battery: 12,
+            location: { coordinates: [72.8656, 19.0896] }, // Residential Area
+            area: 'Residential Area',
+            assignedTo: operator._id,
+            lastReading: {
+              value: 150,
+              unit: 'AQI',
+              timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000) // 2 hours ago
+            },
+            calibrationDate: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
+            maintenanceSchedule: new Date() // Needs immediate maintenance
+          },
+          {
+            sensorId: 'SENS005',
+            type: 'rainfall',
+            status: 'online',
+            health: 'good',
+            battery: 78,
+            location: { coordinates: [72.8777, 19.0760] }, // Business District
+            area: 'Business District',
+            assignedTo: admin._id,
+            lastReading: {
+              value: 15.2,
+              unit: 'mm/hr',
+              timestamp: new Date()
+            },
+            calibrationDate: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000),
+            maintenanceSchedule: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000)
+          },
+          {
+            sensorId: 'SENS006',
+            type: 'wind_speed',
+            status: 'online',
+            health: 'good',
+            battery: 67,
+            location: { coordinates: [72.8700, 19.0800] }, // Zone A
+            area: 'Zone A',
+            assignedTo: operator._id,
+            lastReading: {
+              value: 12.8,
+              unit: 'km/h',
+              timestamp: new Date()
+            },
+            calibrationDate: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000),
+            maintenanceSchedule: new Date(Date.now() + 35 * 24 * 60 * 60 * 1000)
+          }
+        ];
+
+        await Sensor.insertMany(sensors);
+        console.log('✅ Sample sensors with GPS coordinates created');
       }
 
       // Create sample reports
@@ -938,12 +1078,8 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
 app.get('/api/admin/dashboard', authenticateToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const [sensors, alerts] = await Promise.all([
-      // Mock sensor data since we don't have a Sensor model in this file
-      Promise.resolve([
-        { _id: '1', sensorId: 'SENS001', type: 'temperature', status: 'online', health: 'good', battery: 85, location: 'Zone A', createdAt: new Date(), updatedAt: new Date() },
-        { _id: '2', sensorId: 'SENS002', type: 'humidity', status: 'offline', health: 'warning', battery: 45, location: 'Zone B', createdAt: new Date(), updatedAt: new Date() },
-        { _id: '3', sensorId: 'SENS003', type: 'pressure', status: 'online', health: 'critical', battery: 20, location: 'Zone C', createdAt: new Date(), updatedAt: new Date() }
-      ]),
+      // Fetch real sensor data from database
+      Sensor.find({ isActive: true }).populate('assignedTo', 'name email').lean(),
       Alert.find().sort({ createdAt: -1 }).limit(50).lean()
     ]);
     
@@ -1082,14 +1218,8 @@ app.delete('/api/admin/users/:id', authenticateToken, requireRole(['ADMIN']), as
 // Admin Sensor Management Routes
 app.get('/api/admin/sensors', authenticateToken, requireRole(['ADMIN']), async (req, res) => {
   try {
-    // Mock sensor data since we don't have a Sensor model in this file
-    const sensors = [
-      { _id: '1', sensorId: 'SENS001', type: 'temperature', status: 'online', health: 'good', battery: 85, location: 'Zone A', assignedTo: null, createdAt: new Date(), updatedAt: new Date() },
-      { _id: '2', sensorId: 'SENS002', type: 'humidity', status: 'offline', health: 'warning', battery: 45, location: 'Zone B', assignedTo: null, createdAt: new Date(), updatedAt: new Date() },
-      { _id: '3', sensorId: 'SENS003', type: 'pressure', status: 'online', health: 'critical', battery: 20, location: 'Zone C', assignedTo: null, createdAt: new Date(), updatedAt: new Date() },
-      { _id: '4', sensorId: 'SENS004', type: 'seismic', status: 'online', health: 'good', battery: 92, location: 'Zone D', assignedTo: null, createdAt: new Date(), updatedAt: new Date() },
-      { _id: '5', sensorId: 'SENS005', type: 'water_level', status: 'warning', health: 'warning', battery: 67, location: 'Zone E', assignedTo: null, createdAt: new Date(), updatedAt: new Date() }
-    ];
+    // Fetch real sensor data from database
+    const sensors = await Sensor.find({ isActive: true }).populate('assignedTo', 'name email').lean();
     
     res.json({ sensors });
   } catch (error) {
@@ -1206,6 +1336,276 @@ app.get('/api/ml/status', (req, res) => {
       timestamp: new Date().toISOString()
     }
   });
+});
+
+// Map Data Endpoints
+app.get('/api/map/data', async (req, res) => {
+  try {
+    // Get alerts and sensors for map display
+    const [alerts, sensors] = await Promise.all([
+      Alert.find({ active: true }).sort({ createdAt: -1 }).limit(50).lean(),
+      // Fetch real sensor data with GPS coordinates
+      Sensor.find({ isActive: true }).populate('assignedTo', 'name email').lean()
+    ]);
+
+    // Add coordinates to alerts based on area (if not already present)
+    const alertsWithCoords = alerts.map(alert => ({
+      ...alert,
+      coordinates: alert.location?.coordinates || getCoordinatesForArea(alert.area)
+    }));
+
+    // Add coordinates to sensors (if not already present)
+    const sensorsWithCoords = sensors.map(sensor => ({
+      ...sensor,
+      coordinates: sensor.location?.coordinates || getCoordinatesForArea(sensor.area)
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        alerts: alertsWithCoords,
+        sensors: sensorsWithCoords,
+        lastUpdate: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Map data error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch map data', 
+      error: error.message 
+    });
+  }
+});
+
+// Risk overlay data
+app.get('/api/map/risk-overlay', authenticateToken, requireRole(['ADMIN', 'OPERATOR']), async (req, res) => {
+  try {
+    // Mock risk overlay data
+    const riskZones = [
+      {
+        id: 'zone1',
+        name: 'Downtown Risk Zone',
+        coordinates: [[40.7100, -74.0100], [40.7200, -74.0100], [40.7200, -74.0000], [40.7100, -74.0000]],
+        riskLevel: 'high',
+        type: 'flood',
+        probability: 0.75,
+        affectedPopulation: 15000
+      },
+      {
+        id: 'zone2', 
+        name: 'Industrial Area',
+        coordinates: [[40.6850, -74.0500], [40.6950, -74.0500], [40.6950, -74.0400], [40.6850, -74.0400]],
+        riskLevel: 'critical',
+        type: 'chemical',
+        probability: 0.85,
+        affectedPopulation: 8000
+      },
+      {
+        id: 'zone3',
+        name: 'Riverside District',
+        coordinates: [[40.7550, -73.9900], [40.7650, -73.9900], [40.7650, -73.9800], [40.7550, -73.9800]],
+        riskLevel: 'moderate',
+        type: 'landslide',
+        probability: 0.45,
+        affectedPopulation: 12000
+      }
+    ];
+
+    res.json({
+      success: true,
+      data: {
+        riskZones,
+        generatedAt: new Date().toISOString(),
+        modelVersion: '1.0.0'
+      }
+    });
+  } catch (error) {
+    console.error('Risk overlay error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch risk overlay', 
+      error: error.message 
+    });
+  }
+});
+
+// Helper function to get coordinates for areas
+function getCoordinatesForArea(area) {
+  const areaCoordinates = {
+    'Downtown': [40.7128, -74.0060],
+    'Riverside': [40.7589, -73.9851],
+    'Industrial Zone': [40.6892, -74.0445],
+    'Residential Area': [40.7831, -73.9712],
+    'Business District': [40.7505, -73.9934],
+    'Zone A': [40.7200, -74.0100],
+    'Zone B': [40.7300, -73.9900],
+    'Zone C': [40.7400, -74.0200],
+    'Zone D': [40.7100, -73.9800],
+    'Zone E': [40.7500, -74.0300],
+  };
+  
+  return areaCoordinates[area] || [40.7128, -74.0060]; // Default to NYC coordinates
+}
+
+// ML Predictions Endpoint
+app.get('/api/ml/predictions', async (req, res) => {
+  try {
+    // Generate real-time ML predictions (mock for now, but structured for real ML integration)
+    const predictions = [
+      {
+        id: `pred_${Date.now()}_1`,
+        type: 'landslide',
+        probability: 0.85 + Math.random() * 0.1,
+        coordinates: [300 + Math.random() * 50, 200 + Math.random() * 50],
+        radius: 40 + Math.random() * 20,
+        confidence: 0.88 + Math.random() * 0.1,
+        timestamp: new Date().toISOString(),
+        factors: ['heavy_rainfall', 'soil_saturation', 'slope_angle'],
+        affectedArea: 'Hillside District',
+        estimatedImpact: 'high'
+      },
+      {
+        id: `pred_${Date.now()}_2`,
+        type: 'flood',
+        probability: 0.65 + Math.random() * 0.15,
+        coordinates: [500 + Math.random() * 60, 350 + Math.random() * 40],
+        radius: 60 + Math.random() * 30,
+        confidence: 0.75 + Math.random() * 0.15,
+        timestamp: new Date().toISOString(),
+        factors: ['river_level', 'precipitation', 'drainage_capacity'],
+        affectedArea: 'Riverside District',
+        estimatedImpact: 'medium'
+      },
+      {
+        id: `pred_${Date.now()}_3`,
+        type: 'fire',
+        probability: 0.45 + Math.random() * 0.2,
+        coordinates: [250 + Math.random() * 40, 400 + Math.random() * 30],
+        radius: 25 + Math.random() * 15,
+        confidence: 0.68 + Math.random() * 0.2,
+        timestamp: new Date().toISOString(),
+        factors: ['temperature', 'humidity', 'wind_speed', 'vegetation_dryness'],
+        affectedArea: 'Forest Area',
+        estimatedImpact: 'low'
+      },
+      {
+        id: `pred_${Date.now()}_4`,
+        type: 'earthquake',
+        probability: 0.25 + Math.random() * 0.1,
+        coordinates: [400 + Math.random() * 100, 300 + Math.random() * 100],
+        radius: 80 + Math.random() * 40,
+        confidence: 0.55 + Math.random() * 0.25,
+        timestamp: new Date().toISOString(),
+        factors: ['seismic_activity', 'fault_line_proximity', 'geological_stress'],
+        affectedArea: 'Downtown Area',
+        estimatedImpact: 'very_high'
+      }
+    ];
+
+    // Filter predictions by minimum confidence threshold
+    const filteredPredictions = predictions.filter(p => p.confidence > 0.6);
+
+    res.json({
+      success: true,
+      predictions: filteredPredictions,
+      modelInfo: {
+        version: '2.1.0',
+        lastTrained: '2024-01-15T10:30:00Z',
+        accuracy: 0.87,
+        dataPoints: 150000
+      },
+      generatedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('ML predictions error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch ML predictions', 
+      error: error.message 
+    });
+  }
+});
+
+// ML Model Status and Health
+app.get('/api/ml/model-status', authenticateToken, requireRole(['ADMIN', 'OPERATOR']), async (req, res) => {
+  try {
+    const modelStatus = {
+      isOnline: true,
+      lastUpdate: new Date().toISOString(),
+      modelsLoaded: {
+        landslide: { status: 'active', accuracy: 0.89, lastTrained: '2024-01-15' },
+        flood: { status: 'active', accuracy: 0.85, lastTrained: '2024-01-14' },
+        fire: { status: 'active', accuracy: 0.82, lastTrained: '2024-01-13' },
+        earthquake: { status: 'training', accuracy: 0.78, lastTrained: '2024-01-10' }
+      },
+      systemHealth: {
+        cpu: Math.random() * 30 + 20, // 20-50%
+        memory: Math.random() * 40 + 30, // 30-70%
+        gpu: Math.random() * 60 + 20, // 20-80%
+        storage: Math.random() * 20 + 10 // 10-30%
+      },
+      predictionQueue: Math.floor(Math.random() * 10),
+      totalPredictions: Math.floor(Math.random() * 1000) + 5000
+    };
+
+    res.json({
+      success: true,
+      data: modelStatus
+    });
+  } catch (error) {
+    console.error('ML model status error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch ML model status', 
+      error: error.message 
+    });
+  }
+});
+
+// Trigger ML Analysis (for manual predictions)
+app.post('/api/ml/analyze', authenticateToken, requireRole(['ADMIN', 'OPERATOR']), async (req, res) => {
+  try {
+    const { area, type, coordinates } = req.body;
+    
+    // Simulate ML analysis processing
+    const analysisId = `analysis_${Date.now()}`;
+    
+    // In a real implementation, this would trigger actual ML model processing
+    setTimeout(() => {
+      const result = {
+        id: analysisId,
+        type: type || 'general',
+        area: area || 'Unknown Area',
+        coordinates: coordinates || [400, 300],
+        results: {
+          landslide: Math.random() * 0.8,
+          flood: Math.random() * 0.6,
+          fire: Math.random() * 0.4,
+          earthquake: Math.random() * 0.3
+        },
+        confidence: 0.7 + Math.random() * 0.25,
+        timestamp: new Date().toISOString()
+      };
+      
+      // Broadcast to all connected clients
+      io.emit('mlAnalysisComplete', result);
+    }, 2000);
+
+    res.json({
+      success: true,
+      message: 'ML analysis started',
+      analysisId,
+      estimatedTime: '2-5 seconds'
+    });
+  } catch (error) {
+    console.error('ML analysis error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to start ML analysis', 
+      error: error.message 
+    });
+  }
 });
 
 // Report Routes

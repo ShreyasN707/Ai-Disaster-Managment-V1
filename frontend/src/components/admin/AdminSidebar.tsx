@@ -4,6 +4,7 @@ import {
   Settings, 
   FileText, 
   Activity,
+  MapPin,
   LogOut 
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
@@ -25,6 +26,7 @@ import { Button } from "@/components/ui/button";
 
 const adminItems = [
   { title: "Dashboard", url: "/admin", icon: LayoutDashboard },
+  { title: "Map View", url: "/map", icon: MapPin },
   { title: "User Management", url: "/admin/users", icon: Users },
   { title: "Sensor Management", url: "/admin/sensors", icon: Activity },
   { title: "Reports", url: "/admin/reports", icon: FileText },

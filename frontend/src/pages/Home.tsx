@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Navigation } from "@/components/Navigation";
 import { RiskLevelWidget } from "@/components/RiskLevelWidget";
+import MLDisasterMap from "@/components/map/MLDisasterMap";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -293,6 +294,20 @@ export default function Home() {
             </div>
           </CardContent>
         </Card>
+
+        {/* AI-Powered Public Map View */}
+        <div className="mt-8">
+          <MLDisasterMap 
+            height="400px" 
+            showControls={false}
+            alerts={alerts.filter(alert => alert.active).map(alert => ({
+              ...alert,
+              title: alert.message, // Map message to title for compatibility
+              severity: alert.severity as 'low' | 'moderate' | 'high' | 'critical'
+            }))}
+            sensors={[]} 
+          />
+        </div>
       </main>
     </div>
   );

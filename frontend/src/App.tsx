@@ -19,6 +19,7 @@ import OperatorSensors from "./pages/operator/OperatorSensors";
 import OperatorReports from "./pages/operator/OperatorReports";
 import OperatorAlerts from "./pages/operator/OperatorAlerts";
 import MLDashboard from "./pages/MLDashboard";
+import MapView from "./pages/MapView";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -119,6 +120,16 @@ const App = () => (
               element={
                 <ProtectedRoute requiredRole="operator">
                   <MLDashboard />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* Map View - Available to both Admin and Operator */}
+            <Route 
+              path="/map" 
+              element={
+                <ProtectedRoute requiredRole="operator">
+                  <MapView />
                 </ProtectedRoute>
               } 
             />

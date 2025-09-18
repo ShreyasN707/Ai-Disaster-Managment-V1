@@ -3,6 +3,7 @@ import {
   Activity, 
   FileText, 
   AlertTriangle,
+  MapPin,
   LogOut 
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
@@ -24,6 +25,7 @@ import { Button } from "@/components/ui/button";
 
 const operatorItems = [
   { title: "Dashboard", url: "/operator", icon: LayoutDashboard },
+  { title: "Map View", url: "/map", icon: MapPin },
   { title: "Sensors", url: "/operator/sensors", icon: Activity },
   { title: "Incident Reports", url: "/operator/reports", icon: FileText },
   { title: "Alerts", url: "/operator/alerts", icon: AlertTriangle },
