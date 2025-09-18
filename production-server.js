@@ -41,7 +41,7 @@ const emailConfig = {
   service: 'gmail',
   auth: {
     user: process.env.EMAIL_USER || 'shreyasnaik81@gmail.com',
-    pass: process.env.EMAIL_PASS || ''
+    pass: process.env.EMAIL_PASS || 'qebt gpnw fgla aast'
   },
   secure: true,
   tls: {
