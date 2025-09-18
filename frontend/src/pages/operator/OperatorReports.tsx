@@ -44,7 +44,7 @@ export default function OperatorReports() {
   const fetchReports = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/operator/reports', {
+      const response = await fetch('http://localhost:4000/api/operator/reports', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -89,7 +89,7 @@ export default function OperatorReports() {
 
       console.log('📤 Payload:', payload);
 
-      const response = await fetch('/api/operator/reports', {
+      const response = await fetch('http://localhost:4000/api/operator/reports', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

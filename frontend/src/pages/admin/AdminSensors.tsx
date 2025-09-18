@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { Button } from "@/components/ui/button";
@@ -9,61 +9,107 @@ import { SearchBar } from "@/components/shared/SearchBar";
 import { Plus, Activity, AlertTriangle, Wifi } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-interface Sensor {
-  id: string;
-  name: string;
+// Shape returned by backend
+interface BackendSensor {
+  _id: string;
+  sensorId: string;
   type: string;
-  location: string;
+  location: string | { lat?: number; lng?: number; address?: string };
   status: 'online' | 'offline' | 'warning';
   battery: number;
-  lastReading: string;
+  health: string;
+  assignedTo?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
-const mockSensors: Sensor[] = [
-  {
-    id: 'SENS001',
-    name: 'River Level Sensor 1',
-    type: 'Hydrological Sensor',
-    location: 'Riverfront District, Sector C',
-    status: 'online',
-    battery: 85,
-    lastReading: '10 mins ago'
-  },
-  {
-    id: 'SENS002',
-    name: 'Air Quality Monitor 3',
-    type: 'Environmental Sensor',
-    location: 'Industrial Zone North',
-    status: 'warning',
-    battery: 32,
-    lastReading: '5 mins ago'
-  },
-  {
-    id: 'SENS003',
-    name: 'Seismic Sensor A',
-    type: 'Geological Sensor',
-    location: 'Mountain Base Research Outpost',
-    status: 'offline',
-    battery: 12,
-    lastReading: '2 hours ago'
-  }
-];
+// Shape used by SensorFormModal
+interface FormSensor {
+  id?: string;
+  name: string; // maps to sensorId
+  type: string;
+  location: string; // maps to location.address
+  status: 'online' | 'offline' | 'warning';
+  battery?: number;
+}
 
 export default function AdminSensors() {
-  const [sensors, setSensors] = useState<Sensor[]>(mockSensors);
-  const [filteredSensors, setFilteredSensors] = useState<Sensor[]>(mockSensors);
+  const [sensors, setSensors] = useState<BackendSensor[]>([]);
+  const [filteredSensors, setFilteredSensors] = useState<BackendSensor[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingSensor, setEditingSensor] = useState<Sensor | null>(null);
+  const [editingSensor, setEditingSensor] = useState<BackendSensor | null>(null);
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+
+  const mapBackendToForm = (s: BackendSensor | null): FormSensor | null => {
+    if (!s) return null;
+    const address = typeof s.location === 'string' ? s.location : (s.location?.address || '');
+    return {
+      id: s._id,
+      name: s.sensorId,
+      type: s.type,
+      location: address,
+      status: s.status,
+      battery: s.battery,
+    };
+  };
+
+  useEffect(() => {
+    const fetchSensors = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          window.location.href = '/login';
+          return;
+        }
+
+        const response = await fetch('http://localhost:4000/api/admin/sensors', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch sensors');
+        }
+
+        const data = await response.json();
+        setSensors(data.sensors || []);
+        setFilteredSensors(data.sensors || []);
+
+      } catch (error) {
+        console.error('Failed to fetch sensors:', error);
+        // Only show toast for non-network errors or if it's the first load
+        if (!(error instanceof Error) || !(`${error.message}`.includes('Failed to fetch')) || sensors.length === 0) {
+          toast({
+            title: "Sensors Load Issue",
+            description: "Some data may be unavailable. Retrying automatically...",
+            variant: "default",
+          });
+        }
+        // Fallback to prevent UI break
+        setSensors([]);
+        setFilteredSensors([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSensors();
+  }, [toast]);
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
     const filtered = sensors.filter(sensor =>
-      sensor.name.toLowerCase().includes(query.toLowerCase()) ||
+      sensor.sensorId.toLowerCase().includes(query.toLowerCase()) ||
       sensor.type.toLowerCase().includes(query.toLowerCase()) ||
-      sensor.location.toLowerCase().includes(query.toLowerCase()) ||
-      sensor.id.toLowerCase().includes(query.toLowerCase())
+      ((typeof sensor.location === 'string' 
+          ? sensor.location 
+          : (sensor.location?.address || `${sensor.location?.lat ?? ''}, ${sensor.location?.lng ?? ''}`))
+        .toLowerCase()
+        .includes(query.toLowerCase()))
     );
     setFilteredSensors(filtered);
   };
@@ -73,49 +119,117 @@ export default function AdminSensors() {
     setIsModalOpen(true);
   };
 
-  const handleEditSensor = (sensor: Sensor) => {
+  const handleEditSensor = (sensor: BackendSensor) => {
     setEditingSensor(sensor);
     setIsModalOpen(true);
   };
 
-  const handleDeleteSensor = (sensorId: string) => {
-    setSensors(prev => prev.filter(s => s.id !== sensorId));
-    setFilteredSensors(prev => prev.filter(s => s.id !== sensorId));
-    toast({
-      title: "Sensor deleted",
-      description: "Sensor has been successfully removed.",
-    });
-  };
-
-  const handleSaveSensor = (sensorData: Sensor) => {
-    if (editingSensor) {
-      // Update existing sensor
-      setSensors(prev => prev.map(s => s.id === editingSensor.id ? { ...sensorData, id: editingSensor.id } : s));
-      setFilteredSensors(prev => prev.map(s => s.id === editingSensor.id ? { ...sensorData, id: editingSensor.id } : s));
-      toast({
-        title: "Sensor updated",
-        description: "Sensor information has been successfully updated.",
+  const handleDeleteSensor = async (sensorId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:4000/api/admin/sensors/${sensorId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
-    } else {
-      // Add new sensor
-      const newSensor = { 
-        ...sensorData, 
-        id: `SENS${String(sensors.length + 1).padStart(3, '0')}`,
-        lastReading: 'Just now'
-      };
-      setSensors(prev => [...prev, newSensor]);
-      setFilteredSensors(prev => [...prev, newSensor]);
+
+      if (response.ok) {
+        setSensors(prev => prev.filter(s => s._id !== sensorId));
+        setFilteredSensors(prev => prev.filter(s => s._id !== sensorId));
+        toast({
+          title: "Sensor deleted",
+          description: "Sensor has been successfully removed.",
+        });
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to delete sensor');
+      }
+    } catch (error) {
       toast({
-        title: "Sensor created",
-        description: "New sensor has been successfully created.",
+        title: "Error",
+        description: error.message || "Failed to delete sensor.",
+        variant: "destructive",
       });
     }
   };
 
-  const handleViewLocation = (sensor: Sensor) => {
+  const handleSaveSensor = async (sensorData: FormSensor) => {
+    try {
+      const token = localStorage.getItem('token');
+      const payload = {
+        sensorId: sensorData.name,
+        type: sensorData.type,
+        location: { address: sensorData.location },
+        status: sensorData.status,
+        battery: sensorData.battery ?? 100,
+      } as any;
+      
+      if (editingSensor) {
+        // Update existing sensor
+        const response = await fetch(`http://localhost:4000/api/admin/sensors/${editingSensor._id}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setSensors(prev => prev.map(s => s._id === editingSensor._id ? data.sensor as BackendSensor : s));
+          setFilteredSensors(prev => prev.map(s => s._id === editingSensor._id ? data.sensor as BackendSensor : s));
+          toast({
+            title: "Sensor updated",
+            description: "Sensor information has been successfully updated.",
+          });
+        } else {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to update sensor');
+        }
+      } else {
+        // Create new sensor
+        const response = await fetch('http://localhost:4000/api/admin/sensors', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setSensors(prev => [...prev, data.sensor as BackendSensor]);
+          setFilteredSensors(prev => [...prev, data.sensor as BackendSensor]);
+          toast({
+            title: "Sensor created",
+            description: "New sensor has been successfully created.",
+          });
+        } else {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to create sensor');
+        }
+      }
+      setIsModalOpen(false);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: (error as Error).message || "Failed to save sensor.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleViewLocation = (sensor: BackendSensor) => {
+    const loc = typeof sensor.location === 'string' 
+      ? sensor.location 
+      : (sensor.location?.address || `${sensor.location?.lat ?? ''}, ${sensor.location?.lng ?? ''}`);
     toast({
       title: "Map View",
-      description: `Viewing ${sensor.name} on map - ${sensor.location}`,
+      description: `Viewing ${sensor.sensorId} on map - ${loc}`,
     });
   };
 
@@ -219,7 +333,7 @@ export default function AdminSensors() {
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
           onSave={handleSaveSensor}
-          sensor={editingSensor}
+          sensor={mapBackendToForm(editingSensor)}
         />
       </div>
     </SidebarProvider>

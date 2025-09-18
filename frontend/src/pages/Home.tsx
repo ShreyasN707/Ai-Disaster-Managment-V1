@@ -12,13 +12,13 @@ import { ApiResponse } from "@/lib/api";
 
 interface Alert {
   _id: string;
-  title: string;
   message: string;
-  type: string;
   area: string;
   severity: "critical" | "high" | "medium" | "low";
-  createdAt: string;
+  source: string;
   active: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export default function Home() {
@@ -36,15 +36,26 @@ export default function Home() {
     const fetchAlerts = async () => {
       try {
         const response = await fetch('http://localhost:4000/api/public/alerts');
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || `HTTP ${response.status}: Failed to fetch alerts`);
+        }
+        
         const data = await response.json();
+        console.log('Fetched alerts data:', data); // Debug log
+        
         if (data.alerts) {
           setAlerts(data.alerts);
+        } else {
+          console.warn('No alerts property in response:', data);
+          setAlerts([]);
         }
       } catch (error) {
         console.error('Failed to fetch alerts:', error);
         toast({
           title: "Failed to load alerts",
-          description: "Unable to fetch the latest alerts. Please try again later.",
+          description: error.message || "Unable to fetch the latest alerts. Please try again later.",
           variant: "destructive",
         });
       } finally {
@@ -53,6 +64,10 @@ export default function Home() {
     };
 
     fetchAlerts();
+    
+    // Set up polling for new alerts every 30 seconds
+    const interval = setInterval(fetchAlerts, 30000);
+    return () => clearInterval(interval);
   }, [toast]);
 
   const handleSubscribe = async (e: React.FormEvent) => {
@@ -247,27 +262,28 @@ export default function Home() {
                     alerts.map((alert) => (
                       <tr key={alert._id} className="border-b border-border hover:bg-muted/50">
                         <td className="py-4 px-2">
-                          <div className="flex items-center space-x-2">
-                            <Badge variant={alert.severity === 'medium' ? 'secondary' : alert.severity}>
-                              {alert.severity.charAt(0).toUpperCase() + alert.severity.slice(1)}
-                            </Badge>
-                            <span className="font-medium text-foreground">{alert.title}</span>
-                          </div>
+                          <Badge 
+                            variant={alert.severity === 'critical' ? 'destructive' : 
+                                    alert.severity === 'high' ? 'default' : 'outline'}
+                            className="capitalize"
+                          >
+                            {alert.severity}
+                          </Badge>
                         </td>
                         <td className="py-4 px-2">
-                          <div className="flex items-center space-x-1 text-muted-foreground">
-                            <MapPin className="h-4 w-4" />
-                            <span>{alert.area || 'Not specified'}</span>
+                          <div className="flex items-center gap-2">
+                            <MapPin className="w-4 h-4 text-muted-foreground" />
+                            <span>{alert.area || 'Multiple areas'}</span>
                           </div>
+                        </td>
+                        <td className="py-4 px-2 text-sm text-muted-foreground">
+                          {new Date(alert.createdAt).toLocaleString()}
                         </td>
                         <td className="py-4 px-2">
-                          <div className="flex items-center space-x-1 text-muted-foreground">
-                            <Clock className="h-4 w-4" />
-                            <span>{new Date(alert.createdAt).toLocaleString()}</span>
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className="w-4 h-4 text-yellow-500" />
+                            <span className="line-clamp-1">{alert.message}</span>
                           </div>
-                        </td>
-                        <td className="py-4 px-2 text-sm text-muted-foreground max-w-md">
-                          {alert.message}
                         </td>
                       </tr>
                     ))

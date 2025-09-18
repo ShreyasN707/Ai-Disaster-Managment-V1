@@ -13,7 +13,7 @@ export function Navigation({ userType, onLogout }: NavigationProps) {
   const location = useLocation();
   
   // Use userType prop or derive from auth context
-  const currentUserType = userType || user?.role || "public";
+  const currentUserType = userType || user?.role?.toLowerCase() || "public";
 
   const handleLogout = () => {
     if (onLogout) {

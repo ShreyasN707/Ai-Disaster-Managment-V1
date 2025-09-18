@@ -74,7 +74,7 @@ export default function AdminReports() {
   const fetchReports = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/admin/reports', {
+      const response = await fetch('http://localhost:4000/api/admin/reports', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -103,7 +103,7 @@ export default function AdminReports() {
   // Update report status
   const updateReportStatus = async (reportId: string, status: string, adminNotes?: string) => {
     try {
-      const response = await fetch(`/api/admin/reports/${reportId}`, {
+      const response = await fetch(`http://localhost:4000/api/admin/reports/${reportId}`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -243,7 +243,7 @@ export default function AdminReports() {
   const handleUpdateReportStatus = async (reportId: string, newStatus: string, adminNotes?: string) => {
     try {
       setUpdatingReport(reportId);
-      const response = await fetch(`/api/admin/reports/${reportId}`, {
+      const response = await fetch(`http://localhost:4000/api/admin/reports/${reportId}`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,

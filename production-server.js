@@ -198,7 +198,7 @@ const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  role: { type: String, enum: ['admin', 'operator', 'public'], default: 'public' },
+  role: { type: String, enum: ['ADMIN', 'OPERATOR', 'PUBLIC'], default: 'PUBLIC' },
   phone: String,
   location: {
     type: { type: String, default: 'Point' },
@@ -329,7 +329,7 @@ async function initializeDatabase() {
       name: 'System Administrator',
       email: 'admin@disaster.com',
       password: hashedAdminPassword,
-      role: 'admin',
+      role: 'ADMIN',
       phone: '+1234567890',
       location: 'Headquarters',
       isActive: true
@@ -344,7 +344,7 @@ async function initializeDatabase() {
       name: 'Emergency Operator',
       email: 'operator@disaster.com',
       password: hashedOperatorPassword,
-      role: 'operator',
+      role: 'OPERATOR',
       phone: '+1234567891',
       location: 'Control Center',
       isActive: true
@@ -525,7 +525,7 @@ async function sendEmailNotification(email, subject, message) {
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center;">
-              <h1>🚨 AI Disaster Management Alert</h1>
+              <h1>🚨Disaster Management Alert</h1>
             </div>
             <div style="padding: 20px; background: #f9f9f9;">
               <h2 style="color: #333;">${subject}</h2>
@@ -727,7 +727,7 @@ app.post('/api/auth/login', async (req, res) => {
     await user.save();
 
     const token = jwt.sign(
-      { id: user._id, email: user.email, role: user.role },
+      { id: user._id, email: user.email, role: user.role, name: user.name },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
@@ -753,7 +753,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { name, email, password, phone, role = 'public' } = req.body;
+    const { name, email, password, phone, role = 'PUBLIC' } = req.body;
     
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -772,7 +772,7 @@ app.post('/api/auth/register', async (req, res) => {
     await user.save();
 
     const token = jwt.sign(
-      { id: user._id, email: user.email, role: user.role },
+      { id: user._id, email: user.email, role: user.role, name: user.name },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
@@ -935,7 +935,31 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
 });
 
 // Admin routes
-app.post('/api/admin/alerts', authenticateToken, requireRole(['admin', 'operator']), async (req, res) => {
+app.get('/api/admin/dashboard', authenticateToken, requireRole(['ADMIN']), async (req, res) => {
+  try {
+    const [sensors, alerts] = await Promise.all([
+      // Mock sensor data since we don't have a Sensor model in this file
+      Promise.resolve([
+        { _id: '1', sensorId: 'SENS001', type: 'temperature', status: 'online', health: 'good', battery: 85, location: 'Zone A', createdAt: new Date(), updatedAt: new Date() },
+        { _id: '2', sensorId: 'SENS002', type: 'humidity', status: 'offline', health: 'warning', battery: 45, location: 'Zone B', createdAt: new Date(), updatedAt: new Date() },
+        { _id: '3', sensorId: 'SENS003', type: 'pressure', status: 'online', health: 'critical', battery: 20, location: 'Zone C', createdAt: new Date(), updatedAt: new Date() }
+      ]),
+      Alert.find().sort({ createdAt: -1 }).limit(50).lean()
+    ]);
+    
+    res.json({ sensors, alerts });
+  } catch (error) {
+    console.error('Dashboard error:', error);
+    res.status(500).json({ 
+      message: 'Failed to load dashboard data', 
+      error: error.message,
+      sensors: [],
+      alerts: []
+    });
+  }
+});
+
+app.post('/api/admin/alerts', authenticateToken, requireRole(['ADMIN', 'OPERATOR']), async (req, res) => {
   try {
     const { title, message, severity, type, area, coordinates } = req.body;
     
@@ -965,7 +989,7 @@ app.post('/api/admin/alerts', authenticateToken, requireRole(['admin', 'operator
   }
 });
 
-app.get('/api/admin/users', authenticateToken, requireRole(['admin']), async (req, res) => {
+app.get('/api/admin/users', authenticateToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const users = await User.find({}, '-password').sort({ createdAt: -1 });
     res.json({ users });
@@ -974,8 +998,167 @@ app.get('/api/admin/users', authenticateToken, requireRole(['admin']), async (re
   }
 });
 
+app.post('/api/admin/users', authenticateToken, requireRole(['ADMIN']), async (req, res) => {
+  try {
+    const { email, password, name, role, isActive } = req.body;
+    
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: 'User with this email already exists' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 12);
+    const user = await User.create({
+      email,
+      password: hashedPassword,
+      name,
+      role,
+      isActive: isActive !== undefined ? isActive : true
+    });
+
+    const userResponse = user.toObject();
+    delete userResponse.password;
+    
+    res.status(201).json({ user: userResponse });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to create user', error: error.message });
+  }
+});
+
+app.put('/api/admin/users/:id', authenticateToken, requireRole(['ADMIN']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email, name, role, isActive } = req.body;
+
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Check if email is being changed and if it's already taken
+    if (email && email !== user.email) {
+      const existingUser = await User.findOne({ email });
+      if (existingUser) {
+        return res.status(400).json({ message: 'Email already in use' });
+      }
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      id,
+      { email, name, role, isActive },
+      { new: true }
+    ).select('-password');
+
+    res.json({ user: updatedUser });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to update user', error: error.message });
+  }
+});
+
+app.delete('/api/admin/users/:id', authenticateToken, requireRole(['ADMIN']), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Prevent deleting the last admin
+    if (user.role === 'ADMIN') {
+      const adminCount = await User.countDocuments({ role: 'ADMIN' });
+      if (adminCount <= 1) {
+        return res.status(400).json({ message: 'Cannot delete the last admin user' });
+      }
+    }
+
+    await User.findByIdAndDelete(id);
+    res.json({ message: 'User deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to delete user', error: error.message });
+  }
+});
+
+// Admin Sensor Management Routes
+app.get('/api/admin/sensors', authenticateToken, requireRole(['ADMIN']), async (req, res) => {
+  try {
+    // Mock sensor data since we don't have a Sensor model in this file
+    const sensors = [
+      { _id: '1', sensorId: 'SENS001', type: 'temperature', status: 'online', health: 'good', battery: 85, location: 'Zone A', assignedTo: null, createdAt: new Date(), updatedAt: new Date() },
+      { _id: '2', sensorId: 'SENS002', type: 'humidity', status: 'offline', health: 'warning', battery: 45, location: 'Zone B', assignedTo: null, createdAt: new Date(), updatedAt: new Date() },
+      { _id: '3', sensorId: 'SENS003', type: 'pressure', status: 'online', health: 'critical', battery: 20, location: 'Zone C', assignedTo: null, createdAt: new Date(), updatedAt: new Date() },
+      { _id: '4', sensorId: 'SENS004', type: 'seismic', status: 'online', health: 'good', battery: 92, location: 'Zone D', assignedTo: null, createdAt: new Date(), updatedAt: new Date() },
+      { _id: '5', sensorId: 'SENS005', type: 'water_level', status: 'warning', health: 'warning', battery: 67, location: 'Zone E', assignedTo: null, createdAt: new Date(), updatedAt: new Date() }
+    ];
+    
+    res.json({ sensors });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to fetch sensors', error: error.message });
+  }
+});
+
+app.post('/api/admin/sensors', authenticateToken, requireRole(['ADMIN']), async (req, res) => {
+  try {
+    const { sensorId, type, location, assignedTo } = req.body;
+    
+    // Mock sensor creation - in real app this would save to database
+    const newSensor = {
+      _id: Date.now().toString(),
+      sensorId,
+      type,
+      location,
+      assignedTo,
+      status: 'offline',
+      battery: 100,
+      health: 'good',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    res.status(201).json({ sensor: newSensor, message: 'Sensor created successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to create sensor', error: error.message });
+  }
+});
+
+app.put('/api/admin/sensors/:id', authenticateToken, requireRole(['ADMIN']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { sensorId, type, location, assignedTo, status, battery, health } = req.body;
+    
+    // Mock sensor update - in real app this would update in database
+    const updatedSensor = {
+      _id: id,
+      sensorId,
+      type,
+      location,
+      assignedTo,
+      status,
+      battery,
+      health,
+      createdAt: new Date(Date.now() - 86400000), // 1 day ago
+      updatedAt: new Date()
+    };
+    
+    res.json({ sensor: updatedSensor, message: 'Sensor updated successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to update sensor', error: error.message });
+  }
+});
+
+app.delete('/api/admin/sensors/:id', authenticateToken, requireRole(['ADMIN']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Mock sensor deletion - in real app this would delete from database
+    res.json({ message: 'Sensor deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to delete sensor', error: error.message });
+  }
+});
+
 // Operator routes
-app.post('/api/operator/incidents', authenticateToken, requireRole(['admin', 'operator']), async (req, res) => {
+app.post('/api/operator/incidents', authenticateToken, requireRole(['ADMIN', 'OPERATOR']), async (req, res) => {
   try {
     const { title, description, type, severity, area, coordinates } = req.body;
     
@@ -998,7 +1181,7 @@ app.post('/api/operator/incidents', authenticateToken, requireRole(['admin', 'op
   }
 });
 
-app.get('/api/operator/incidents', authenticateToken, requireRole(['admin', 'operator']), async (req, res) => {
+app.get('/api/operator/incidents', authenticateToken, requireRole(['ADMIN', 'OPERATOR']), async (req, res) => {
   try {
     const incidents = await Incident.find()
       .sort({ createdAt: -1 })
@@ -1028,7 +1211,7 @@ app.get('/api/ml/status', (req, res) => {
 // Report Routes
 
 // Get all reports (Admin)
-app.get('/api/admin/reports', authenticateToken, requireRole(['admin']), async (req, res) => {
+app.get('/api/admin/reports', authenticateToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const { status, severity, search } = req.query;
     let query = {};
@@ -1063,7 +1246,7 @@ app.get('/api/admin/reports', authenticateToken, requireRole(['admin']), async (
 });
 
 // Update report status (Admin)
-app.patch('/api/admin/reports/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
+app.patch('/api/admin/reports/:id', authenticateToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const { id } = req.params;
     const { status, adminNotes } = req.body;
@@ -1101,9 +1284,9 @@ app.patch('/api/admin/reports/:id', authenticateToken, requireRole(['admin']), a
 });
 
 // Get operator's reports
-app.get('/api/operator/reports', authenticateToken, requireRole(['operator', 'admin']), async (req, res) => {
+app.get('/api/operator/reports', authenticateToken, requireRole(['OPERATOR', 'ADMIN']), async (req, res) => {
   try {
-    const operatorId = req.user.role === 'admin' ? req.query.operatorId : req.user.id;
+    const operatorId = req.user.role === 'ADMIN' ? req.query.operatorId : req.user.id;
     
     const reports = await Report.find({ operatorId })
       .populate('reviewedBy', 'name')
@@ -1117,7 +1300,7 @@ app.get('/api/operator/reports', authenticateToken, requireRole(['operator', 'ad
 });
 
 // Submit new report (Operator)
-app.post('/api/operator/reports', authenticateToken, requireRole(['operator', 'admin']), async (req, res) => {
+app.post('/api/operator/reports', authenticateToken, requireRole(['OPERATOR', 'ADMIN']), async (req, res) => {
   try {
     console.log('📝 Report submission request:', {
       user: req.user,
@@ -1161,9 +1344,9 @@ app.post('/api/operator/reports', authenticateToken, requireRole(['operator', 'a
 });
 
 // Get report statistics
-app.get('/api/reports/stats', authenticateToken, requireRole(['admin', 'operator']), async (req, res) => {
+app.get('/api/reports/stats', authenticateToken, requireRole(['ADMIN', 'OPERATOR']), async (req, res) => {
   try {
-    const isOperator = req.user.role === 'operator';
+    const isOperator = req.user.role === 'OPERATOR';
     const query = isOperator ? { operatorId: req.user.id } : {};
 
     const [total, pending, reviewed, resolved, critical] = await Promise.all([

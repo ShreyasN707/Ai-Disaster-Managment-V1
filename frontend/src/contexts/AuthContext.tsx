@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
 interface User {
-  id: string;
+  _id: string;
   email: string;
-  role: 'admin' | 'operator';
+  role: 'ADMIN' | 'OPERATOR';
   name: string;
 }
 
@@ -25,8 +25,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Check for stored auth on app start
-    const storedUser = localStorage.getItem('disasterwatch_user');
-    const storedToken = localStorage.getItem('disasterwatch_token');
+    const storedUser = localStorage.getItem('user');
+    const storedToken = localStorage.getItem('token');
     if (storedUser && storedToken) {
       setUser(JSON.parse(storedUser));
       setToken(storedToken);
@@ -40,7 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log('🔐 Attempting login with:', { email, role });
       
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch('http://localhost:4000/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -69,7 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('✅ Login successful, user data:', data);
       
       const user: User = {
-        id: data.user.id,
+        _id: data.user._id,
         email: data.user.email,
         role: data.user.role,
         name: data.user.name
@@ -77,8 +77,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       setUser(user);
       setToken(data.token);
-      localStorage.setItem('disasterwatch_user', JSON.stringify(user));
-      localStorage.setItem('disasterwatch_token', data.token);
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(user));
       setLoading(false);
       return true;
       
@@ -93,26 +93,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
-      
       // For admin signup, require admin code
       if (role === 'admin' && adminCode !== 'ADMIN2024') {
         setLoading(false);
         return false;
       }
+
+      const response = await fetch('http://localhost:4000/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          email, 
+          password, 
+          name, 
+          role: role.toUpperCase() 
+        })
+      });
+
+      if (!response.ok) {
+        setLoading(false);
+        return false;
+      }
+
+      const data = await response.json();
       
-      const mockUser: User = {
-        id: `${role}_${Date.now()}`,
-        email,
-        role,
-        name
+      const user: User = {
+        _id: data.user._id,
+        email: data.user.email,
+        role: data.user.role,
+        name: data.user.name
       };
       
-      setUser(mockUser);
-      localStorage.setItem('disasterwatch_user', JSON.stringify(mockUser));
+      setUser(user);
+      setToken(data.token);
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(user));
       setLoading(false);
       return true;
     } catch (error) {
+      console.error('Signup error:', error);
       setLoading(false);
       return false;
     }
@@ -121,8 +142,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     setUser(null);
     setToken(null);
-    localStorage.removeItem('disasterwatch_user');
-    localStorage.removeItem('disasterwatch_token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
   };
 
   return (

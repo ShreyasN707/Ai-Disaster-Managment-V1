@@ -20,6 +20,7 @@
     "docker:logs": "docker-compose logs -f",
     "docker:clean": "docker-compose down -v && docker system prune -f",
     "train:ml": "python train_and_export.py",
+    "sample-data": "node scripts/add-sample-data.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "echo \"Linting not configured\" && exit 0",
     "deploy:production": "npm run build && docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d"

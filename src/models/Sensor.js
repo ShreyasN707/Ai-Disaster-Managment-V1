@@ -9,9 +9,10 @@ const sensorSchema = new mongoose.Schema(
       lng: { type: Number, required: false },
       address: { type: String },
     },
-    status: { type: String, enum: ['online', 'offline', 'maintenance'], default: 'online' },
+    status: { type: String, enum: ['online', 'offline', 'warning', 'maintenance'], default: 'online' },
     battery: { type: Number, min: 0, max: 100, default: 100 },
     health: { type: String, enum: ['good', 'warning', 'critical'], default: 'good' },
+    lastReading: { type: String, default: null }, // For display purposes
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },

@@ -26,9 +26,13 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (requiredRole && user.role !== requiredRole) {
-    // Redirect to appropriate dashboard based on user role
-    return <Navigate to={user.role === 'admin' ? '/admin' : '/operator'} replace />;
+  if (requiredRole) {
+    // Convert backend role format (ADMIN/OPERATOR) to frontend format (admin/operator) for comparison
+    const userRole = user.role.toLowerCase();
+    if (userRole !== requiredRole) {
+      // Redirect to appropriate dashboard based on user role
+      return <Navigate to={userRole === 'admin' ? '/admin' : '/operator'} replace />;
+    }
   }
 
   return <>{children}</>;

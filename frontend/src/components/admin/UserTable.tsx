@@ -18,12 +18,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 interface User {
-  id: string;
+  _id: string;
   name: string;
   email: string;
-  role: 'admin' | 'operator';
-  status: 'active' | 'inactive';
-  lastLogin: string;
+  role: 'ADMIN' | 'OPERATOR';
+  isActive: boolean;
+  lastLogin?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface UserTableProps {
@@ -34,13 +36,13 @@ interface UserTableProps {
 
 export function UserTable({ users, onEdit, onDelete }: UserTableProps) {
   const getRoleBadge = (role: string) => {
-    return role === 'admin' 
+    return role === 'ADMIN' 
       ? <Badge variant="high">Admin</Badge>
       : <Badge variant="moderate">Operator</Badge>;
   };
 
-  const getStatusBadge = (status: string) => {
-    return status === 'active' 
+  const getStatusBadge = (isActive: boolean) => {
+    return isActive 
       ? <Badge variant="safe">Active</Badge>
       : <Badge variant="offline">Inactive</Badge>;
   };
@@ -59,37 +61,47 @@ export function UserTable({ users, onEdit, onDelete }: UserTableProps) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {users.map((user) => (
-            <TableRow key={user.id}>
-              <TableCell className="font-medium">{user.name}</TableCell>
-              <TableCell>{user.email}</TableCell>
-              <TableCell>{getRoleBadge(user.role)}</TableCell>
-              <TableCell>{getStatusBadge(user.status)}</TableCell>
-              <TableCell className="text-muted-foreground">{user.lastLogin}</TableCell>
-              <TableCell className="text-right">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="h-8 w-8 p-0">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => onEdit(user)}>
-                      <Edit className="mr-2 h-4 w-4" />
-                      Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuItem 
-                      onClick={() => onDelete(user.id)}
-                      className="text-critical"
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+          {users.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                No users found. User management functionality needs backend implementation.
               </TableCell>
             </TableRow>
-          ))}
+          ) : (
+            users.map((user) => (
+              <TableRow key={user._id}>
+                <TableCell className="font-medium">{user.name}</TableCell>
+                <TableCell>{user.email}</TableCell>
+                <TableCell>{getRoleBadge(user.role)}</TableCell>
+                <TableCell>{getStatusBadge(user.isActive)}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {user.lastLogin ? new Date(user.lastLogin).toLocaleString() : 'Never'}
+                </TableCell>
+                <TableCell className="text-right">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" className="h-8 w-8 p-0">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => onEdit(user)}>
+                        <Edit className="mr-2 h-4 w-4" />
+                        Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => onDelete(user._id)}
+                        className="text-critical"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TableCell>
+              </TableRow>
+            ))
+          )}
         </TableBody>
       </Table>
     </div>

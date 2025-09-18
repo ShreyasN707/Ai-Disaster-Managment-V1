@@ -17,13 +17,16 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 interface Sensor {
-  id: string;
-  name: string;
+  _id: string;
+  sensorId: string;
   type: string;
-  location: string;
+  location: string | { lat?: number; lng?: number; address?: string };
   status: 'online' | 'offline' | 'warning';
   battery: number;
-  lastReading: string;
+  health: string;
+  assignedTo?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface SensorTableProps {
@@ -34,6 +37,13 @@ interface SensorTableProps {
 }
 
 export function SensorTable({ sensors, onEdit, onDelete, onViewLocation }: SensorTableProps) {
+  const formatLocation = (loc: Sensor['location']) => {
+    if (typeof loc === 'string') return loc;
+    if (!loc) return 'Unknown';
+    if (loc.address) return loc.address;
+    if (loc.lat != null && loc.lng != null) return `${loc.lat}, ${loc.lng}`;
+    return 'Unknown';
+  };
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'online':
@@ -69,56 +79,64 @@ export function SensorTable({ sensors, onEdit, onDelete, onViewLocation }: Senso
           </TableRow>
         </TableHeader>
         <TableBody>
-          {sensors.map((sensor) => (
-            <TableRow key={sensor.id}>
-              <TableCell className="font-mono text-sm">{sensor.id}</TableCell>
-              <TableCell className="font-medium">{sensor.name}</TableCell>
-              <TableCell>{sensor.type}</TableCell>
-              <TableCell>
-                <div className="flex items-center space-x-1">
-                  <MapPin className="h-3 w-3 text-muted-foreground" />
-                  <span className="text-sm">{sensor.location}</span>
-                </div>
-              </TableCell>
-              <TableCell>{getStatusBadge(sensor.status)}</TableCell>
-              <TableCell>
-                <span className={getBatteryColor(sensor.battery)}>
-                  {sensor.battery}%
-                </span>
-              </TableCell>
-              <TableCell className="text-muted-foreground text-sm">
-                {sensor.lastReading}
-              </TableCell>
-              <TableCell className="text-right">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="h-8 w-8 p-0">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => onEdit(sensor)}>
-                      <Edit className="mr-2 h-4 w-4" />
-                      Edit
-                    </DropdownMenuItem>
-                    {onViewLocation && (
-                      <DropdownMenuItem onClick={() => onViewLocation(sensor)}>
-                        <MapPin className="mr-2 h-4 w-4" />
-                        View on Map
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem 
-                      onClick={() => onDelete(sensor.id)}
-                      className="text-critical"
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+          {sensors.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                No sensors found.
               </TableCell>
             </TableRow>
-          ))}
+          ) : (
+            sensors.map((sensor) => (
+              <TableRow key={sensor._id}>
+                <TableCell className="font-mono text-sm">{sensor.sensorId}</TableCell>
+                <TableCell className="font-medium">{sensor.sensorId}</TableCell>
+                <TableCell>{sensor.type}</TableCell>
+                <TableCell>
+                  <div className="flex items-center space-x-1">
+                    <MapPin className="h-3 w-3 text-muted-foreground" />
+                    <span className="text-sm">{formatLocation(sensor.location)}</span>
+                  </div>
+                </TableCell>
+                <TableCell>{getStatusBadge(sensor.status)}</TableCell>
+                <TableCell>
+                  <span className={getBatteryColor(sensor.battery)}>
+                    {sensor.battery}%
+                  </span>
+                </TableCell>
+                <TableCell className="text-muted-foreground text-sm">
+                  {new Date(sensor.updatedAt).toLocaleString()}
+                </TableCell>
+                <TableCell className="text-right">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" className="h-8 w-8 p-0">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => onEdit(sensor)}>
+                        <Edit className="mr-2 h-4 w-4" />
+                        Edit
+                      </DropdownMenuItem>
+                      {onViewLocation && (
+                        <DropdownMenuItem onClick={() => onViewLocation(sensor)}>
+                          <MapPin className="mr-2 h-4 w-4" />
+                          View on Map
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem 
+                        onClick={() => onDelete(sensor._id)}
+                        className="text-critical"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TableCell>
+              </TableRow>
+            ))
+          )}
         </TableBody>
       </Table>
     </div>

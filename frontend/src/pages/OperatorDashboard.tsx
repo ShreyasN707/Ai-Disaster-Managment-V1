@@ -1,8 +1,10 @@
+import { useState, useEffect } from "react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { OperatorSidebar } from "@/components/operator/OperatorSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatsCard } from "@/components/shared/StatsCard";
+import { useToast } from "@/hooks/use-toast";
 import { 
   AlertTriangle, 
   Activity,
@@ -14,120 +16,99 @@ import {
   Timer
 } from "lucide-react";
 
-const activeAlerts = [
-  {
-    title: "Major Flood Warning",
-    severity: "high",
-    description: "Heavy rainfall causing rapid river level rise. Evacuation advisory issued.",
-    location: "Riverfront District, Sector C",
-    time: "10:30 AM, Today"
-  },
-  {
-    title: "Wildfire Near Forest Edge", 
-    severity: "high",
-    description: "Fire detected in East Forest, moving towards residential area. Response team deployed.",
-    location: "East Forest Boundary, Zone B",
-    time: "09:15 AM, Today"
-  },
-  {
-    title: "Infrastructure Damage Report",
-    severity: "moderate",
-    description: "Bridge structural integrity compromised after recent weather events.",
-    location: "Bridge 42, Central Artery", 
-    time: "08:00 AM, Today"
-  }
-];
+interface Sensor {
+  _id: string;
+  sensorId: string;
+  type: string;
+  location: string | { lat?: number; lng?: number; address?: string };
+  status: "online" | "offline" | "warning";
+  battery: number;
+  health: string;
+  lastReading?: string;
+}
 
-const sensorStatus = [
-  {
-    name: "River Level Sensor 1",
-    type: "Hydrological Sensor",
-    location: "Riverfront Pier",
-    status: "warning",
-    battery: 65,
-    lastReading: "10:50 AM, Today"
-  },
-  {
-    name: "Air Quality Monitor 3",
-    type: "Environmental Sensor", 
-    location: "Industrial Zone North",
-    status: "online",
-    battery: 92,
-    lastReading: "10:55 AM, Today"
-  },
-  {
-    name: "Seismic Sensor A",
-    type: "Geological Sensor",
-    location: "Mountain Base Research Outpost", 
-    status: "online",
-    battery: 78,
-    lastReading: "10:45 AM, Today"
-  },
-  {
-    name: "Temperature & Humidity 2",
-    type: "Environmental Sensor",
-    location: "Residential Area 5",
-    status: "offline", 
-    battery: 15,
-    lastReading: "08:30 AM, Today"
-  },
-  {
-    name: "Water Quality Probe",
-    type: "Hydrological Sensor",
-    location: "Lakeview Pumping Station",
-    status: "online",
-    battery: 85,
-    lastReading: "10:52 AM, Today"
-  },
-  {
-    name: "Wind Speed Sensor", 
-    type: "Meteorological Sensor",
-    location: "Coastal Observation Post",
-    status: "warning",
-    battery: 30,
-    lastReading: "10:48 AM, Today"
-  }
-];
-
-const responseActivity = [
-  {
-    id: "INC005",
-    location: "Central Park",
-    status: "ongoing", 
-    team: "Alpha Squad",
-    lastUpdate: "10:40 AM"
-  },
-  {
-    id: "INC004",
-    location: "Downtown Plaza",
-    status: "resolved",
-    team: "Bravo Team", 
-    lastUpdate: "09:55 AM"
-  },
-  {
-    id: "INC003", 
-    location: "Highway 101",
-    status: "pending",
-    team: "Charlie Unit",
-    lastUpdate: "Yesterday, 06:00 PM"
-  },
-  {
-    id: "INC002",
-    location: "Port Area", 
-    status: "resolved",
-    team: "Delta Force",
-    lastUpdate: "Yesterday, 03:20 PM"
-  },
-  {
-    id: "INC001",
-    location: "Suburban Residential",
-    status: "ongoing",
-    team: "Echo Team",
-    lastUpdate: "Yesterday, 01:10 PM"
-  }
-];
+interface Alert {
+  _id: string;
+  message: string;
+  area: string;
+  severity: "critical" | "high" | "medium" | "low";
+  source: string;
+  active: boolean;
+  createdAt: string;
+}
 
 export default function OperatorDashboard() {
+  const [sensors, setSensors] = useState<Sensor[]>([]);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+
+  const formatLocation = (loc: Sensor['location']) => {
+    if (typeof loc === 'string') return loc;
+    if (!loc) return 'Unknown';
+    if (loc.address) return loc.address;
+    if (loc.lat != null && loc.lng != null) return `${loc.lat}, ${loc.lng}`;
+    return 'Unknown';
+  };
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          window.location.href = '/login';
+          return;
+        }
+
+        const response = await fetch('http://localhost:4000/api/operator/dashboard', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.href = '/login';
+            return;
+          }
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || `HTTP ${response.status}: Failed to fetch dashboard data`);
+        }
+
+        const data = await response.json();
+        console.log('Operator dashboard data:', data); // Debug log
+        setSensors(data.sensors || []);
+        setAlerts(data.alerts || []);
+
+      } catch (error) {
+        console.error('Failed to fetch dashboard data:', error);
+        
+        // Only show toast for non-network errors or if it's the first load
+        if (!error.message.includes('Failed to fetch') || sensors.length === 0) {
+          toast({
+            title: "Dashboard Load Issue",
+            description: "Some data may be unavailable. Retrying automatically...",
+            variant: "default",
+          });
+        }
+        
+        // Set fallback data to prevent UI errors
+        setSensors([]);
+        setAlerts([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+    
+    // Set up polling for real-time updates
+    const interval = setInterval(fetchDashboardData, 30000);
+    return () => clearInterval(interval);
+  }, [toast]);
 
   const getSeverityBadge = (severity: string) => {
     switch (severity) {
@@ -197,29 +178,45 @@ export default function OperatorDashboard() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-              {activeAlerts.map((alert, index) => (
-                <div key={index} className="border border-border rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-semibold text-foreground">{alert.title}</h3>
-                    {getSeverityBadge(alert.severity)}
-                  </div>
-                  
-                  <p className="text-sm text-muted-foreground mb-3 leading-relaxed">
-                    {alert.description}
-                  </p>
-                  
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center space-x-2 text-muted-foreground">
-                      <MapPin className="h-4 w-4" />
-                      <span>{alert.location}</span>
-                    </div>
-                    <div className="flex items-center space-x-2 text-muted-foreground">
-                      <Clock className="h-4 w-4" />
-                      <span>{alert.time}</span>
-                    </div>
-                  </div>
+              {loading ? (
+                <div className="col-span-full text-center py-8 text-muted-foreground">
+                  Loading alerts...
                 </div>
-              ))}
+              ) : alerts.length === 0 ? (
+                <div className="col-span-full text-center py-8 text-muted-foreground">
+                  No active alerts at this time.
+                </div>
+              ) : (
+                alerts.filter(alert => alert.active).slice(0, 6).map((alert) => (
+                  <div key={alert._id} className="border border-border rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-semibold text-foreground">{alert.area}</h3>
+                      <Badge 
+                        variant={alert.severity === 'critical' ? 'destructive' : 
+                                alert.severity === 'high' ? 'default' : 'outline'}
+                        className="capitalize"
+                      >
+                        {alert.severity}
+                      </Badge>
+                    </div>
+                    
+                    <p className="text-sm text-muted-foreground mb-3 leading-relaxed">
+                      {alert.message}
+                    </p>
+                    
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center space-x-2 text-muted-foreground">
+                        <MapPin className="h-4 w-4" />
+                        <span>{alert.area}</span>
+                      </div>
+                      <div className="flex items-center space-x-2 text-muted-foreground">
+                        <Clock className="h-4 w-4" />
+                        <span>{new Date(alert.createdAt).toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
@@ -238,31 +235,41 @@ export default function OperatorDashboard() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {sensorStatus.map((sensor, index) => (
-                  <div key={index} className="border border-border rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-medium text-foreground text-sm">{sensor.name}</h4>
-                      {getStatusBadge(sensor.status)}
-                    </div>
-                    
-                    <p className="text-xs text-muted-foreground mb-3">{sensor.type}</p>
-                    
-                    <div className="space-y-1 text-xs">
-                      <div className="flex items-center space-x-1 text-muted-foreground">
-                        <MapPin className="h-3 w-3" />
-                        <span>{sensor.location}</span>
-                      </div>
-                      <div className={`flex items-center space-x-1 ${getBatteryColor(sensor.battery)}`}>
-                        <Battery className="h-3 w-3" />
-                        <span>Battery: {sensor.battery}%</span>
-                      </div>
-                      <div className="flex items-center space-x-1 text-muted-foreground">
-                        <Clock className="h-3 w-3" />
-                        <span>Last Reading: {sensor.lastReading}</span>
-                      </div>
-                    </div>
+                {loading ? (
+                  <div className="col-span-full text-center py-8 text-muted-foreground">
+                    Loading sensors...
                   </div>
-                ))}
+                ) : sensors.length === 0 ? (
+                  <div className="col-span-full text-center py-8 text-muted-foreground">
+                    No sensors assigned to you.
+                  </div>
+                ) : (
+                  sensors.slice(0, 6).map((sensor) => (
+                    <div key={sensor._id} className="border border-border rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-medium text-foreground text-sm">{sensor.sensorId}</h4>
+                        {getStatusBadge(sensor.status)}
+                      </div>
+                      
+                      <p className="text-xs text-muted-foreground mb-3">{sensor.type}</p>
+                      
+                      <div className="space-y-1 text-xs">
+                        <div className="flex items-center space-x-1 text-muted-foreground">
+                          <MapPin className="h-3 w-3" />
+                          <span>{formatLocation(sensor.location)}</span>
+                        </div>
+                        <div className={`flex items-center space-x-1 ${getBatteryColor(sensor.battery)}`}>
+                          <Battery className="h-3 w-3" />
+                          <span>Battery: {sensor.battery}%</span>
+                        </div>
+                        <div className="flex items-center space-x-1 text-muted-foreground">
+                          <Clock className="h-3 w-3" />
+                          <span>Last Reading: {sensor.lastReading || 'No recent data'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </CardContent>
           </Card>
@@ -288,19 +295,19 @@ export default function OperatorDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {responseActivity.map((incident, index) => (
-                      <tr key={index} className="border-b border-border hover:bg-muted/50">
-                        <td className="py-3 px-2">
-                          <Badge variant="outline" className="font-mono text-xs">
-                            {incident.id}
-                          </Badge>
+                    {loading ? (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center text-muted-foreground">
+                          Loading incidents...
                         </td>
-                        <td className="py-3 px-2 text-sm text-foreground">{incident.location}</td>
-                        <td className="py-3 px-2">{getStatusBadge(incident.status)}</td>
-                        <td className="py-3 px-2 text-sm text-muted-foreground">{incident.team}</td>
-                        <td className="py-3 px-2 text-sm text-muted-foreground">{incident.lastUpdate}</td>
                       </tr>
-                    ))}
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center text-muted-foreground">
+                          No incident data available. This feature requires additional backend implementation.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>

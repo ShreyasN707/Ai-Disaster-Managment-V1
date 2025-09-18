@@ -7,9 +7,27 @@ const ApiError = require('../utils/ApiError');
 
 // Get operator dashboard with assigned sensors and recent alerts
 const dashboard = asyncHandler(async (req, res) => {
-  const sensors = await Sensor.find({ assignedTo: req.user.id }).lean();
-  const recentAlerts = await Alert.find({ active: true }).sort({ createdAt: -1 }).limit(20).lean();
-  res.json({ sensors, alerts: recentAlerts });
+  try {
+    // For now, return all sensors if none are specifically assigned to the operator
+    // This is because the current system doesn't have proper sensor assignment logic
+    let sensors = await Sensor.find({ assignedTo: req.user.id }).lean();
+    
+    // If no sensors are assigned, return all sensors for demonstration
+    if (sensors.length === 0) {
+      sensors = await Sensor.find().lean();
+    }
+    
+    const recentAlerts = await Alert.find({ active: true }).sort({ createdAt: -1 }).limit(20).lean();
+    res.json({ sensors, alerts: recentAlerts });
+  } catch (error) {
+    console.error('Operator dashboard error:', error);
+    res.status(500).json({ 
+      message: 'Failed to load dashboard data', 
+      error: error.message,
+      sensors: [],
+      alerts: []
+    });
+  }
 });
 
 // Acknowledge an alert and notify via socket
@@ -53,4 +71,16 @@ const createIncident = asyncHandler(async (req, res) => {
   res.status(201).json({ incident });
 });
 
-module.exports = { dashboard, acknowledge, addSensor, updateSensor, createIncident };
+// Get incidents for operator
+const getIncidents = asyncHandler(async (req, res) => {
+  const incidents = await Incident.find({ operatorId: req.user.id }).sort({ createdAt: -1 }).lean();
+  res.json({ incidents });
+});
+
+// Get alerts for operator
+const getAlerts = asyncHandler(async (req, res) => {
+  const alerts = await Alert.find({ active: true }).sort({ createdAt: -1 }).lean();
+  res.json({ alerts });
+});
+
+module.exports = { dashboard, acknowledge, addSensor, updateSensor, createIncident, getIncidents, getAlerts };
