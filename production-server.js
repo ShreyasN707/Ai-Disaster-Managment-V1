@@ -32,9 +32,34 @@ process.on('SIGINT', () => {
 
 // Configuration
 const PORT = process.env.PORT || 10000;
-const MONGODB_URI = process.env.MONGO_URI || process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/ai_disaster_mgmt?directConnection=true';
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecretjwtkey_change_me';
 const NODE_ENV = process.env.NODE_ENV || 'development';
+
+// MongoDB URI validation and configuration
+let MONGODB_URI = process.env.MONGO_URI || process.env.MONGODB_URI;
+
+// Validate MongoDB URI format
+function isValidMongoURI(uri) {
+  if (!uri) return false;
+  
+  // Check if it's a valid MongoDB connection string
+  const mongoUriPattern = /^mongodb(\+srv)?:\/\/.+/;
+  return mongoUriPattern.test(uri);
+}
+
+// Set default MongoDB URI based on environment
+if (!MONGODB_URI || !isValidMongoURI(MONGODB_URI)) {
+  if (NODE_ENV === 'production') {
+    console.error('❌ Invalid or missing MONGO_URI environment variable in production!');
+    console.error('💡 Current MONGO_URI value:', JSON.stringify(MONGODB_URI));
+    console.error('💡 Expected format: mongodb+srv://username:password@cluster.mongodb.net/database?retryWrites=true&w=majority');
+    console.error('💡 Please set a valid MONGO_URI environment variable in your deployment settings.');
+    process.exit(1);
+  } else {
+    console.warn('⚠️  Using local MongoDB fallback for development');
+    MONGODB_URI = 'mongodb://127.0.0.1:27017/ai_disaster_mgmt?directConnection=true';
+  }
+}
 
 // Email Configuration
 const emailConfig = {
@@ -117,15 +142,36 @@ const mongoOptions = {
   w: 'majority'
 };
 
-mongoose.connect(MONGODB_URI, mongoOptions).then(() => {
-  console.log('✅ Connected to MongoDB');
+console.log('🔗 Attempting to connect to MongoDB...');
+console.log('🔗 MongoDB URI (masked):', MONGODB_URI.replace(/\/\/[^@]+@/, '//***:***@'));
+
+mongoose.connect(MONGODB_URI, mongoOptions).then(async () => {
+  console.log('✅ Connected to MongoDB successfully');
+  
+  // Initialize database after successful connection
+  await initializeDatabase();
+  
+  // Start the server after database initialization
+  startServer();
 }).catch(err => {
-  console.error('❌ MongoDB connection error:', err);
-  if (NODE_ENV === 'production') {
-    console.error('💡 Make sure MONGO_URI environment variable is set correctly');
+  console.error('❌ MongoDB connection failed:', err.message);
+  
+  if (err.message.includes('ENOTFOUND') && err.message.includes('_mongodb._tcp')) {
+    console.error('💡 This error indicates an invalid MongoDB connection string format.');
+    console.error('💡 The MONGO_URI appears to be malformed or incomplete.');
+    console.error('💡 Current MONGO_URI value:', JSON.stringify(process.env.MONGO_URI));
   }
-  console.log('⚠️  Starting server with limited functionality (no database)');
-  process.exit(1);
+  
+  if (NODE_ENV === 'production') {
+    console.error('💡 In production, make sure MONGO_URI environment variable is set to a valid MongoDB connection string');
+    console.error('💡 Example: mongodb+srv://username:password@cluster.mongodb.net/database?retryWrites=true&w=majority');
+    console.error('💡 Check your deployment environment variables in your hosting platform dashboard');
+    process.exit(1);
+  } else {
+    console.log('⚠️  Development mode: Starting server with limited functionality (no database)');
+    // Start server even without database in development
+    startServer();
+  }
 });
 
 // Create Express app
@@ -1145,47 +1191,19 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'frontend', 'dist', 'index.html'));
 });
 
-// Connect to MongoDB and start server
-async function start() {
-  try {
-    await mongoose.connect(MONGODB_URI);
-    console.log('✅ Connected to MongoDB');
-    
-    // Initialize database with sample data
-    await initializeDatabase();
-    
-    server.listen(PORT, () => {
-      console.log(`\n🚀 AI Disaster Management System - PRODUCTION MODE`);
-      console.log(`================================================`);
-      console.log(`🌐 Frontend:        http://localhost:${PORT}`);
-      console.log(`🔗 API:             http://localhost:${PORT}/api`);
-      console.log(`📊 Health Check:    http://localhost:${PORT}/health`);
-      console.log(`🔌 WebSocket:       Connected`);
-      console.log(`📱 Real-time Alerts: Enabled`);
-      console.log(`\n👤 Login Credentials:`);
-      console.log(`   Admin:    admin@disaster.com / admin123`);
-      console.log(`   Operator: operator@disaster.com / operator123`);
-      console.log(`\n🚀 System is fully functional with real data!`);
-    });
-    
-    // Handle shutdown gracefully
-    process.on('SIGINT', async () => {
-      console.log('\n🛑 Shutting down gracefully...');
-      try {
-        await mongoose.connection.close();
-        console.log('MongoDB connection closed');
-        process.exit(0);
-      } catch (error) {
-        console.error('Error closing MongoDB connection:', error);
-        process.exit(1);
-      }
-    });
-    
-  } catch (error) {
-    console.error('❌ Failed to start application:', error.message);
-    process.exit(1);
-  }
+// Start server function (called after successful MongoDB connection)
+function startServer() {
+  server.listen(PORT, () => {
+    console.log(`\n🚀 AI Disaster Management System - PRODUCTION MODE`);
+    console.log(`================================================`);
+    console.log(`🌐 Frontend:        http://localhost:${PORT}`);
+    console.log(`🔗 API:             http://localhost:${PORT}/api`);
+    console.log(`📊 Health Check:    http://localhost:${PORT}/health`);
+    console.log(`🔌 WebSocket:       Connected`);
+    console.log(`📱 Real-time Alerts: Enabled`);
+    console.log(`\n👤 Login Credentials:`);
+    console.log(`   Admin:    admin@disaster.com / admin123`);
+    console.log(`   Operator: operator@disaster.com / operator123`);
+    console.log(`\n🚀 System is fully functional with real data!`);
+  });
 }
-
-// Start the application
-start();
